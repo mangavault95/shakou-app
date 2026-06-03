@@ -37,23 +37,23 @@ export default function App() {
   if (loading) return <div style={{ padding:20 }}>Caricamento...</div>;
   if (!user) return <Login />;
 
-  return (
-    <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column' }}>
-      <Header user={user} onNavigate={setView} />
-      <div style={{ display:'flex', flex:1 }}>
-        <Sidebar onNavigate={setView} />
-        <main style={{ flex:1, background:'#fff' }}>
-          {view === 'dashboard' && <Dashboard onNavigate={setView} />}
-          {view === 'home' && <Profile user={user} />}
-          {view === 'admin' && <Admin />}
-          {view === 'settings' && (
-            <div style={{ padding:20 }}>
-              <h2>Impostazioni</h2>
-              <p>Qui puoi aggiungere impostazioni dell'app (branding, SMTP, ecc.).</p>
-            </div>
-          )}
-        </main>
-      </div>
+return (
+  <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column' }}>
+    <Header user={user} onNavigate={setView} />
+    <div style={{ display:'flex', flex:1 }}>
+      <Sidebar onNavigate={setView} />
+      <main style={{ flex:1, background:'#fff' }}>
+        {view === 'dashboard' && <Dashboard onNavigate={setView} />}
+        {view === 'home' && <Profile user={user} />}
+        {view === 'admin' && <Admin />}
+        {view === 'settings' && (
+          <div style={{ padding:20 }}>
+            <h2>Impostazioni</h2>
+          </div>
+        )}
+      </main>
     </div>
-  );
+  </div>
+);
+
 }
