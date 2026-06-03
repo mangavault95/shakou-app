@@ -1,10 +1,11 @@
 // src/components/MangaLibrary.jsx
 import React from 'react';
+import { normalizeTitle } from '../utils/normalizeTitle';
 
 export default function MangaLibrary({ user, setView, setSelectedManga }) {
   const [library, setLibrary] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
-  const [removing, setRemoving] = React.useState({}); // map id -> bool
+  const [removing, setRemoving] = React.useState({});
 
   React.useEffect(() => {
     if (!user?.id) return;
@@ -26,7 +27,17 @@ export default function MangaLibrary({ user, setView, setSelectedManga }) {
         setLibrary([]);
         return;
       }
-      setLibrary(json?.library || []);
+      const raw = json?.library || [];
+      // dedup semplice
+      const seen = new Set();
+      const unique = raw.filter(i => {
+        const k = i.manga_id || i.external_id || (i.manga && (i.manga.id || i.manga.external_id));
+        if (!k) return false;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      setLibrary(unique);
     } catch (err) {
       console.error('fetchLibrary failed', err);
       setLibrary([]);
@@ -38,7 +49,9 @@ export default function MangaLibrary({ user, setView, setSelectedManga }) {
   async function removeItem(item) {
     const id = item.id || item.manga_id || item.external_id;
     if (!id) return;
-    // ottimistic UI
+    const ok = window.confirm('Sei sicuro di voler rimuovere questo manga dalla tua libreria?');
+    if (!ok) return;
+
     const prev = library;
     setLibrary(prev.filter(i => i !== item));
     setRemoving(r => ({ ...r, [id]: true }));
@@ -47,7 +60,7 @@ export default function MangaLibrary({ user, setView, setSelectedManga }) {
       const res = await fetch('/api/social/unfollowManga', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-sync-token': import.meta.env.VITE_SYNC_SECRET || '' },
-        body: JSON.stringify({ user_id: user.id, manga_id: item.manga_id || item.manga?.id || item.manga_id, external_id: item.external_id || item.manga?.external_id })
+        body: JSON.stringify({ user_id: user.id, manga_id: item.manga_id || item.manga?.id || null, external_id: item.external_id || item.manga?.external_id || null })
       });
       const text = await res.text();
       if (!res.ok) {
@@ -72,13 +85,19 @@ export default function MangaLibrary({ user, setView, setSelectedManga }) {
   }
 
   function openDetail(item) {
-    const manga = item.manga || { id: item.manga_id, external_id: item.external_id, source: item.source, title: item.title };
+    const m = item.manga || { id: item.manga_id, external_id: item.external_id, source: item.source, title: item.title };
+    const normalized = {
+      id: m.id || m.external_id,
+      external_id: m.external_id || m.id,
+      source: m.source || 'anilist',
+      title: normalizeTitle(m.title || m)
+    };
     if (typeof setSelectedManga === 'function') {
-      setSelectedManga({ externalId: manga.external_id || manga.id, source: manga.source || 'anilist' });
+      setSelectedManga(normalized);
       setView && setView('manga');
     } else {
-      // fallback: try to open detail via navigation if your app supports routes
-      // window.location.href = `/manga/${manga.external_id || manga.id}`;
+      // fallback: se hai route, puoi navigare
+      // window.location.href = `/manga/${normalized.external_id}`;
     }
   }
 
@@ -90,7 +109,7 @@ export default function MangaLibrary({ user, setView, setSelectedManga }) {
     <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))', gap:12 }}>
       {library.map(item => {
         const m = item.manga || {};
-        const title = m.title || (m.title && (m.title.romaji || m.title.english)) || (typeof m === 'string' ? m : 'Untitled');
+        const title = normalizeTitle(m.title || m.title_raw || m);
         const cover = m.cover_url || m.coverImage?.large || '/placeholder-cover.png';
         const key = item.id || item.manga_id || item.external_id;
         return (
@@ -100,7 +119,7 @@ export default function MangaLibrary({ user, setView, setSelectedManga }) {
               style={{ height:220, backgroundImage:`url(${cover})`, backgroundSize:'cover', backgroundPosition:'center' }}
             />
             <div style={{ padding:8, display:'flex', flexDirection:'column', gap:8 }}>
-              <div style={{ fontWeight:700 }}>{typeof title === 'object' ? (title.romaji || title.english || 'Untitled') : title}</div>
+              <div style={{ fontWeight:700 }}>{title}</div>
               <div style={{ color:'#666', fontSize:13 }}>Status: {item.status || '—'}</div>
               <div style={{ display:'flex', gap:8, marginTop:6 }}>
                 <button onClick={(e) => { e.stopPropagation(); openDetail(item); }} style={{ padding:'6px 10px' }}>Dettagli</button>
