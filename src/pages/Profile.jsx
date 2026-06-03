@@ -31,7 +31,6 @@ export default function Profile({ user, setView, setSelectedManga }) {
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>
-          {/* Azioni contestuali: mantieni solo qui, non duplicare nella sidebar */}
           <button onClick={() => setView && setView('explore')}>Vai a Esplora</button>
           <button onClick={() => setView && setView('dashboard')}>Vai a Dashboard</button>
         </div>
