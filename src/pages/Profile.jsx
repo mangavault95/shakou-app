@@ -1,8 +1,20 @@
+// src/pages/Profile.jsx
 import React from 'react';
 import MangaLibrary from '../components/MangaLibrary';
 import Header from '../components/Header';
 
-export default function Profile({ user, setView }) {
+function formatDisplayName(user) {
+  const name = user?.user_metadata?.full_name || user?.email || '';
+  if (!name) return 'Utente';
+  // se è un'email, prendi la parte prima della @
+  if (name.includes('@')) {
+    const local = name.split('@')[0];
+    return local.charAt(0).toUpperCase() + local.slice(1);
+  }
+  return name;
+}
+
+export default function Profile({ user, setView, setSelectedManga }) {
   if (!user) {
     return (
       <div style={{ padding: 20 }}>
@@ -16,18 +28,20 @@ export default function Profile({ user, setView }) {
     <div style={{ padding: 20, maxWidth: 1100, margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
         <div>
-          <h2 style={{ margin: 0 }}>{user.user_metadata?.full_name || user.email || 'Utente'}</h2>
-          <div style={{ color: '#666', fontSize: 13, marginTop: 6 }}>ID: {user.id}</div>
+          <h2 style={{ margin: 0 }}>{formatDisplayName(user)}</h2>
+          <div style={{ color: '#666', fontSize: 13, marginTop: 6 }}>Email: {user.email}</div>
         </div>
+
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => setView && setView('explore')}>Esplora</button>
-          <button onClick={() => setView && setView('dashboard')}>Dashboard</button>
+          {/* Rimosse le voci duplicate a sinistra; qui rimangono solo azioni contestuali */}
+          <button onClick={() => setView && setView('explore')}>Vai a Esplora</button>
+          <button onClick={() => setView && setView('dashboard')}>Vai a Dashboard</button>
         </div>
       </div>
 
       <section style={{ marginBottom: 28 }}>
         <h3 style={{ marginTop: 0 }}>La tua Libreria</h3>
-        <MangaLibrary user={user} />
+        <MangaLibrary user={user} setView={setView} setSelectedManga={setSelectedManga} />
       </section>
 
       <section style={{ marginTop: 28 }}>
