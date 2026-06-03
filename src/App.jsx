@@ -10,53 +10,51 @@ export default function App() {
   const [view, setView] = React.useState('home'); // 'home' | 'admin' | 'login'
 
   React.useEffect(() => {
+    // 1) check existing session
     supabase.auth.getSession().then(({ data }) => {
-      if (data?.session) {
-        setUser(data.session.user);
-      }
+      if (data?.session) setUser(data.session.user);
       setLoading(false);
     });
 
+    // 2) handle redirect tokens in URL (oauth / magic link)
     async function handleSessionFromUrl() {
       try {
         const { data } = await supabase.auth.getSessionFromUrl({ storeSession: true });
         if (data?.session) setUser(data.session.user);
       } catch (e) {
-        console.log(e);
+        console.log('handleSessionFromUrl', e);
       }
     }
     handleSessionFromUrl();
 
+    // 3) listen to auth state changes
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
+
     return () => { if (sub?.subscription) sub.subscription.unsubscribe(); };
   }, []);
 
   if (loading) return <div style={{padding:20}}>Caricamento...</div>;
 
-  // semplice navigazione interna
   if (!user) return <Login />;
 
-  // se sei admin e vuoi vedere admin
-  if (view === 'admin') return (
-    <div>
-      <div style={{ padding: 12 }}>
-        <button onClick={() => setView('home')} style={{ marginRight:8 }}>Torna al profilo</button>
-        <button onClick={() => supabase.auth.signOut()}>Sign out</button>
-      </div>
-      <Admin />
-    </div>
-  );
-
-  // view = home (profilo)
+  // semplice navigazione interna
   return (
     <div>
-      <div style={{ padding: 12 }}>
-        <button onClick={() => setView('admin')} style={{ marginRight:8 }}>Admin Console</button>
-        <button onClick={() => supabase.auth.signOut()}>Sign out</button>
-      </div>
-      <Profile user={user} />
+      <header style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:12, borderBottom:'1px solid #eee' }}>
+        <div style={{ fontWeight:700 }}>Shakou</div>
+        <div style={{ display:'flex', gap:8 }}>
+          <button onClick={() => setView('home')} style={{ padding:8 }}>Profilo</button>
+          <button onClick={() => setView('admin')} style={{ padding:8 }}>Admin</button>
+          <button onClick={() => supabase.auth.signOut()} style={{ padding:8 }}>Sign out</button>
+        </div>
+      </header>
+
+      <main>
+        {view === 'home' && <Profile user={user} />}
+        {view === 'admin' && <Admin />}
+      </main>
     </div>
   );
 }
