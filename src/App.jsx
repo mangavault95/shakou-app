@@ -7,30 +7,45 @@ import Profile from './pages/Profile';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 import MangaSearch from './pages/MangaSearch';
+import MangaDetail from './pages/MangaDetail';
 
 export default function App() {
   const [user, setUser] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [view, setView] = React.useState('dashboard');
+  const [selectedManga, setSelectedManga] = React.useState(null);
 
   React.useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data?.session) setUser(data.session.user);
-      setLoading(false);
-    });
+    let mounted = true;
 
-    async function handleSessionFromUrl() {
+    async function init() {
       try {
-        const { data } = await supabase.auth.getSessionFromUrl({ storeSession: true });
-        if (data?.session) setUser(data.session.user);
-      } catch (e) { console.log('handleSessionFromUrl', e); }
+        const { data } = await supabase.auth.getSession();
+        // data.session may be undefined; handle both shapes
+        const session = data?.session ?? data?.session ?? null;
+        if (mounted) {
+          setUser(session?.user ?? null);
+          console.log('App init session user:', session?.user ?? null);
+          setLoading(false);
+        }
+      } catch (e) {
+        console.error('getSession error', e);
+        if (mounted) setLoading(false);
+      }
     }
-    handleSessionFromUrl();
+    init();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      // session may be null when signed out
+      const u = session?.user ?? null;
+      setUser(u);
+      console.log('onAuthStateChange user:', u);
     });
-    return () => { if (sub?.subscription) sub.subscription.unsubscribe(); };
+
+    return () => {
+      mounted = false;
+      try { sub?.subscription?.unsubscribe?.(); } catch (e) { /* ignore */ }
+    };
   }, []);
 
   if (loading) return <div style={{ padding:20 }}>Caricamento...</div>;
@@ -44,7 +59,8 @@ export default function App() {
         <main style={{ flex:1, background:'#fff' }}>
           {view === 'dashboard' && <Dashboard onNavigate={setView} />}
           {view === 'home' && <Profile user={user} />}
-          {view === 'explore' && <MangaSearch />}
+          {view === 'explore' && <MangaSearch user={user} setView={setView} setSelectedManga={setSelectedManga} />}
+          {view === 'manga' && selectedManga && <MangaDetail user={user} externalId={selectedManga.externalId} source={selectedManga.source} />}
           {view === 'admin' && <Admin />}
           {view === 'settings' && (
             <div style={{ padding:20 }}>
