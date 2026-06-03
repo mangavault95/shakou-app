@@ -24,8 +24,10 @@ export default function App() {
 
   return (
     <div>
-      <Sidebar setView={setView} currentView={view} />
-      <Header user={user} onLogout={handleLogout} setView={setView} />
+     // snippet da usare in src/App.jsx
+<Sidebar setView={setView} currentView={view} />
+<Header user={user} onLogout={handleLogout} setView={setView} />
+
 
       <main style={{ marginLeft: 220, padding: 20, marginTop: 64 }}>
         {view === 'dashboard' && <Dashboard user={user} />}
