@@ -1,8 +1,9 @@
 // src/components/MangaCard.jsx
 import React from 'react';
+import { normalizeTitle } from '../utils/normalizeTitle';
 
 export default function MangaCard({ manga, user, onOpen, setView }) {
-  const title = (manga.title && (manga.title.english || manga.title.romaji || manga.title.native)) || manga.title || 'Untitled';
+  const title = normalizeTitle(manga.title || manga.title_raw || manga);
   const cover = manga.coverImage?.large || manga.coverImage?.medium || manga.cover_url || '/placeholder-cover.png';
   const [loading, setLoading] = React.useState(false);
 
@@ -48,7 +49,7 @@ export default function MangaCard({ manga, user, onOpen, setView }) {
       if (json?.ok) {
         alert('Aggiunto ai tuoi manga.');
         if (typeof setView === 'function') {
-          setView('home'); // porta al profilo/libreria
+          setView('profile');
         }
       } else {
         alert('Errore: ' + (json?.error || 'unknown'));
@@ -62,7 +63,6 @@ export default function MangaCard({ manga, user, onOpen, setView }) {
   }
 
   function handleOpen(e) {
-    // se il click proviene da un bottone, non aprire
     if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
     if (onOpen) onOpen(manga);
   }
