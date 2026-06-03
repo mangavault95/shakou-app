@@ -1,4 +1,3 @@
-// src/pages/Admin.jsx
 import React from 'react';
 import { supabase } from '../supabase';
 
@@ -36,7 +35,6 @@ export default function Admin() {
     if (!emailToAdd) return alert('Inserisci un indirizzo email.');
     setActionLoading(true);
 
-    // 1) trova il profilo con quell'email
     const { data: prof, error: profErr } = await supabase
       .from('profiles')
       .select('id,email')
@@ -48,7 +46,6 @@ export default function Admin() {
       return alert('Profilo non trovato: ' + profErr.message);
     }
 
-    // 2) inserisci in admins (richiede che l'utente corrente sia admin)
     const { error: insertErr } = await supabase
       .from('admins')
       .insert([{ user_id: prof.id }]);
@@ -56,7 +53,6 @@ export default function Admin() {
     setActionLoading(false);
     if (insertErr) return alert('Errore promozione admin: ' + insertErr.message);
 
-    // opzionale: aggiorna anche il campo role nella tabella profiles
     await supabase.from('profiles').update({ role: 'admin' }).eq('id', prof.id);
 
     setEmailToAdd('');
@@ -70,7 +66,6 @@ export default function Admin() {
     const { error } = await supabase.from('admins').delete().eq('user_id', userId);
     setActionLoading(false);
     if (error) return alert('Errore rimozione admin: ' + error.message);
-    // opzionale: demota anche in profiles
     await supabase.from('profiles').update({ role: 'user' }).eq('id', userId);
     fetchAllProfiles();
   }
