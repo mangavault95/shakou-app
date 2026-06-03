@@ -14,18 +14,16 @@ export default async function handler(req, res) {
     const { user_id, manga } = body;
     if (!user_id || !manga?.external_id) return res.status(400).json({ error: 'missing user_id or manga.external_id' });
 
-    // upsert manga in public.manga
     const mangaRow = {
       external_id: String(manga.external_id),
       source: manga.source || 'anilist',
-      title: JSON.stringify({ romaji: manga.title || null }),
+      title: manga.title || null,
       cover_url: manga.cover_url || null,
       last_synced: new Date().toISOString()
     };
 
     const upserted = await supabaseUpsertSingle('manga', mangaRow, 'external_id,source');
 
-    // upsert user_manga
     const userMangaRow = {
       user_id,
       manga_id: upserted.id,
@@ -42,7 +40,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, manga: upserted, user_manga: userManga });
   } catch (err) {
     console.error('followManga error:', err && (err.stack || err.message || err));
-    // restituisci sempre JSON leggibile dal client
     return res.status(500).json({ error: 'internal_server_error', detail: String(err && (err.message || err)) });
   }
 }
