@@ -12,6 +12,7 @@ export default function MangaDetail({ user, externalId, source }) {
     fetchAniList();
     fetchComments();
     fetchUserManga();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalId]);
 
   async function fetchAniList() {
@@ -32,7 +33,7 @@ export default function MangaDetail({ user, externalId, source }) {
   }
 
   async function fetchComments() {
-    const res = await fetch(`/api/social/mangaComments?manga_id=${externalId}`, { headers: { 'x-sync-token': process.env.REACT_APP_SYNC_SECRET || '' } });
+    const res = await fetch(`/api/social/mangaComments?manga_id=${externalId}`, { headers: { 'x-sync-token': import.meta.env.VITE_SYNC_SECRET || '' } });
     const json = await res.json();
     setComments(json?.comments || []);
   }
@@ -40,7 +41,7 @@ export default function MangaDetail({ user, externalId, source }) {
   async function followThis() {
     if (!user) return alert('Devi essere loggato.');
     const body = { user_id: user.id, manga: { external_id: externalId, source: source || 'anilist', title: manga?.title?.romaji || manga?.title?.english, cover_url: manga?.coverImage?.large } };
-    const res = await fetch('/api/social/followManga', { method:'POST', headers:{ 'Content-Type':'application/json', 'x-sync-token': process.env.REACT_APP_SYNC_SECRET || '' }, body: JSON.stringify(body) });
+    const res = await fetch('/api/social/followManga', { method:'POST', headers:{ 'Content-Type':'application/json', 'x-sync-token': import.meta.env.VITE_SYNC_SECRET || '' }, body: JSON.stringify(body) });
     const json = await res.json();
     if (json?.ok) { setUserManga(json.user_manga); alert('Seguito.'); }
   }
@@ -48,7 +49,7 @@ export default function MangaDetail({ user, externalId, source }) {
   async function saveProgress(updates) {
     if (!user) return alert('Devi essere loggato.');
     const body = { user_id: user.id, manga_id: userManga?.manga_id, updates };
-    const res = await fetch('/api/social/updateProgress', { method:'POST', headers:{ 'Content-Type':'application/json', 'x-sync-token': process.env.REACT_APP_SYNC_SECRET || '' }, body: JSON.stringify(body) });
+    const res = await fetch('/api/social/updateProgress', { method:'POST', headers:{ 'Content-Type':'application/json', 'x-sync-token': import.meta.env.VITE_SYNC_SECRET || '' }, body: JSON.stringify(body) });
     const json = await res.json();
     if (json?.ok) setUserManga(json.user_manga);
   }
@@ -56,7 +57,7 @@ export default function MangaDetail({ user, externalId, source }) {
   async function postComment() {
     if (!user || !commentText.trim()) return;
     const body = { user_id: user.id, manga_id: userManga?.manga_id || null, content: commentText };
-    const res = await fetch('/api/social/mangaComments', { method:'POST', headers:{ 'Content-Type':'application/json', 'x-sync-token': process.env.REACT_APP_SYNC_SECRET || '' }, body: JSON.stringify(body) });
+    const res = await fetch('/api/social/mangaComments', { method:'POST', headers:{ 'Content-Type':'application/json', 'x-sync-token': import.meta.env.VITE_SYNC_SECRET || '' }, body: JSON.stringify(body) });
     const json = await res.json();
     if (json?.ok) { setCommentText(''); fetchComments(); }
   }
