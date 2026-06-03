@@ -4,10 +4,8 @@ import React from 'react';
 export default function Sidebar({ setView, currentView }) {
   const items = [
     { key: 'dashboard', label: 'Dashboard' },
-    { key: 'profile', label: 'Profilo' },
-    { key: 'explore', label: 'Esplora' },
-    { key: 'admin', label: 'Admin' },
-    { key: 'settings', label: 'Impostazioni' }
+    { key: 'explore', label: 'Esplora' }
+    // non inserire Profilo/Admin/Impostazioni qui per evitare duplicati
   ];
 
   return (
@@ -31,7 +29,7 @@ export default function Sidebar({ setView, currentView }) {
       {items.map(it => (
         <button
           key={it.key}
-          onClick={() => setView(it.key)}
+          onClick={() => setView && setView(it.key)}
           style={{
             textAlign: 'left',
             padding: '10px 12px',
