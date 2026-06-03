@@ -1,17 +1,14 @@
-// api/social/followManga.js
-import { supabaseUpsertSingle } from '../_supabaseService.js';
-
-const SYNC_SECRET = process.env.SYNC_SECRET;
+// /api/social/followManga.js
+import { supabaseUpsertSingle } from '../_supabaseService.js'; // se _supabaseService.js è in /api
 
 export default async function handler(req, res) {
-  const token = req.headers['x-sync-token'];
-  if (!token || token !== SYNC_SECRET) return res.status(401).json({ error: 'unauthorized' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' });
 
   try {
-    const { user_id, manga } = req.body; // manga: { external_id, source, title, cover_url }
-    if (!user_id || !manga?.external_id) return res.status(400).json({ error: 'missing' });
+    const { user_id, manga } = req.body;
+    if (!user_id || !manga?.external_id) return res.status(400).json({ error: 'missing user_id or manga.external_id' });
 
-    // 1) ensure manga exists in public.manga (upsert by external_id+source)
+    // upsert manga in public.manga
     const mangaRow = {
       external_id: String(manga.external_id),
       source: manga.source || 'anilist',
@@ -21,7 +18,7 @@ export default async function handler(req, res) {
     };
     const upserted = await supabaseUpsertSingle('manga', mangaRow, 'external_id,source');
 
-    // 2) upsert user_manga
+    // upsert user_manga
     const userMangaRow = {
       user_id,
       manga_id: upserted.id,
@@ -37,7 +34,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ ok: true, manga: upserted, user_manga: userManga });
   } catch (err) {
-    console.error(err);
+    console.error('followManga error', err);
     return res.status(500).json({ error: String(err) });
   }
 }
