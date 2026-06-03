@@ -18,14 +18,11 @@ export default function Header({ user, onNavigate }) {
           .eq('id', user.id)
           .single();
         if (error) {
-          console.log('Header fetchProfileName', error.message);
-          // fallback: show email from auth user
           if (mounted) setDisplayName(user.email ?? '');
           return;
         }
         if (mounted) setDisplayName(data?.full_name || data?.email || user.email || '');
       } catch (e) {
-        console.log('Header fetchProfileName exception', e);
         if (mounted) setDisplayName(user.email || '');
       }
     }
@@ -44,11 +41,6 @@ export default function Header({ user, onNavigate }) {
     }}>
       <div style={{ display:'flex', alignItems:'center', gap:12 }}>
         <div style={{ fontWeight:700, fontSize:18 }}>Shakou</div>
-        <nav style={{ display:'flex', gap:8 }}>
-          <button onClick={() => onNavigate('dashboard')} style={{ padding:8 }}>Dashboard</button>
-          <button onClick={() => onNavigate('home')} style={{ padding:8 }}>Profilo</button>
-          <button onClick={() => onNavigate('admin')} style={{ padding:8 }}>Admin</button>
-        </nav>
       </div>
 
       <div style={{ display:'flex', alignItems:'center', gap:12 }}>
