@@ -2,22 +2,26 @@ import React from 'react';
 import { supabase } from '../supabase';
 
 export default function Profile({ user }) {
-  const [series, setSeries] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
 
-  React.useEffect(() => {
-    async function load() {
-      const { data } = await supabase.from('series').select('*').eq('created_by', user.id);
-      setSeries(data || []);
-    }
-    load();
-  }, [user]);
+  async function signOut() {
+    setLoading(true);
+    await supabase.auth.signOut();
+    setLoading(false);
+  }
 
   return (
-    <div style={{padding:20}}>
-      <h2>Profilo</h2>
-      <p><strong>{user.email}</strong></p>
-      <h3>Le tue serie</h3>
-      <ul>{series.map(s => <li key={s.id}>{s.title} ({s.type})</li>)}</ul>
+    <div style={{ maxWidth:720, margin:'40px auto', padding:20 }}>
+      <h2>Benvenuto</h2>
+      <div style={{ marginBottom:12 }}>
+        <strong>Email:</strong> {user.email}
+      </div>
+      <div style={{ marginBottom:12 }}>
+        <strong>UID:</strong> {user.id}
+      </div>
+      <button onClick={signOut} disabled={loading} style={{ padding:10 }}>
+        {loading ? 'Uscita...' : 'Sign out'}
+      </button>
     </div>
   );
 }
