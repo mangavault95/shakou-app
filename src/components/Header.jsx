@@ -1,42 +1,26 @@
+// src/components/Header.jsx
 import React from 'react';
-import { supabase } from '../supabase';
 
-export default function Header({ user }) {
-  const [displayName, setDisplayName] = React.useState('');
-
-  React.useEffect(() => {
-    let mounted = true;
-    async function fetchProfileName() {
-      if (!user?.id) { setDisplayName(''); return; }
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('full_name,email')
-          .eq('id', user.id)
-          .single();
-        if (error) { if (mounted) setDisplayName(user.email ?? ''); return; }
-        if (mounted) setDisplayName(data?.full_name || data?.email || user.email || '');
-      } catch (e) { if (mounted) setDisplayName(user.email || ''); }
-    }
-    fetchProfileName();
-    return () => { mounted = false; };
-  }, [user]);
-
-  async function signOut() { await supabase.auth.signOut(); }
-
+export default function Header({ user, onLogout, onOpenSearch }) {
   return (
     <header style={{
-      display:'flex', justifyContent:'space-between', alignItems:'center',
-      padding:'12px 20px', borderBottom:'1px solid #eee', background:'#fff'
+      height: 64,
+      padding: '12px 20px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderBottom: '1px solid #eee',
+      marginLeft: 220, // lascia spazio alla sidebar fissa
+      background: '#fff'
     }}>
-      <div style={{ fontWeight:700, fontSize:18 }}>Shakou</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ fontWeight: 700 }}>Shakou</div>
+        <button onClick={onOpenSearch} style={{ padding: '6px 10px' }}>Cerca</button>
+      </div>
 
-      <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-        <div style={{ textAlign:'right', fontSize:13 }}>
-          <div style={{ fontWeight:600 }}>{displayName || user.email}</div>
-          <div style={{ color:'#666' }}>{user?.id?.slice(0,8)}</div>
-        </div>
-        <button onClick={signOut} style={{ padding:'8px 12px' }}>Sign out</button>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ color: '#666', fontSize: 13 }}>{user?.email ? user.email.split('@')[0] : 'Guest'}</div>
+        <button onClick={onLogout} style={{ padding: '6px 10px' }}>Sign out</button>
       </div>
     </header>
   );
