@@ -2,18 +2,18 @@
 import React from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import Profile from './pages/Profile';
+
 import Dashboard from './pages/Dashboard';
-import Explore from './pages/Explore';
+import Profile from './pages/Profile';
+import MangaSearch from './pages/MangaSearch';
 import MangaDetail from './pages/MangaDetail';
 
 export default function App() {
-  const [view, setView] = React.useState('dashboard'); // default
-  const [user, setUser] = React.useState(null); // imposta con la sessione reale
+  const [view, setView] = React.useState('dashboard');
+  const [user, setUser] = React.useState(null); 
   const [selectedManga, setSelectedManga] = React.useState(null);
 
   function handleLogout() {
-    // implementa logout supabase o redirect
     setUser(null);
     setView('explore');
   }
@@ -29,9 +29,26 @@ export default function App() {
 
       <main style={{ marginLeft: 220, padding: 20, marginTop: 64 }}>
         {view === 'dashboard' && <Dashboard user={user} />}
-        {view === 'profile' && <Profile user={user} setView={setView} setSelectedManga={setSelectedManga} />}
-        {view === 'explore' && <Explore user={user} onOpen={(m) => { setSelectedManga(m); setView('manga'); }} />}
-        {view === 'manga' && <MangaDetail selectedManga={selectedManga} setView={setView} />}
+        {view === 'profile' && (
+          <Profile
+            user={user}
+            setView={setView}
+            setSelectedManga={setSelectedManga}
+          />
+        )}
+        {view === 'explore' && (
+          <MangaSearch
+            user={user}
+            setView={setView}
+            setSelectedManga={setSelectedManga}
+          />
+        )}
+        {view === 'manga' && (
+          <MangaDetail
+            selectedManga={selectedManga}
+            setView={setView}
+          />
+        )}
         {view === 'admin' && <div>Admin (in costruzione)</div>}
         {view === 'settings' && <div>Impostazioni (in costruzione)</div>}
       </main>
