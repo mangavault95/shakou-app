@@ -11,7 +11,7 @@ export default function MangaCard({ manga, user, onOpen }) {
     const body = { user_id: user.id, manga: { external_id: manga.id || manga.external_id, source: manga.source || 'anilist', title, cover_url: cover } };
     const res = await fetch('/api/social/followManga', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-sync-token': process.env.REACT_APP_SYNC_SECRET || '' },
+      headers: { 'Content-Type': 'application/json', 'x-sync-token': import.meta.env.VITE_SYNC_SECRET || '' },
       body: JSON.stringify(body)
     });
     const json = await res.json();
