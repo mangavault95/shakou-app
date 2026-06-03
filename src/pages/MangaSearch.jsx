@@ -4,14 +4,14 @@ import Credits from '../components/Credits';
 
 const ANILIST_URL = 'https://graphql.anilist.co';
 
-export default function MangaSearch() {
+export default function MangaSearch({ user, setView, setSelectedManga }) {
   const [query, setQuery] = React.useState('');
   const [page, setPage] = React.useState(1);
   const [results, setResults] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [hasMore, setHasMore] = React.useState(false);
 
-  async function search(q, p = 1) {
+  async function search(q = '', p = 1) {
     setLoading(true);
     const gql = `
       query ($q: String, $page:Int, $perPage:Int) {
@@ -52,9 +52,15 @@ export default function MangaSearch() {
   }
 
   React.useEffect(() => {
-    // carica una lista iniziale popolare
     search('', 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function openDetail(manga) {
+    if (!setSelectedManga || !setView) return;
+    setSelectedManga({ externalId: manga.id, source: 'anilist' });
+    setView('manga');
+  }
 
   return (
     <div style={{ padding:20 }}>
@@ -73,7 +79,14 @@ export default function MangaSearch() {
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))', gap:16 }}>
-        {loading ? <div>Caricamento...</div> : results.map(m => <MangaCard key={m.id} manga={m} />)}
+        {loading ? <div>Caricamento...</div> : results.map(m => (
+          <MangaCard
+            key={m.id}
+            manga={m}
+            user={user}
+            onOpen={(manga) => openDetail(manga)}
+          />
+        ))}
       </div>
 
       <div style={{ marginTop:18, display:'flex', justifyContent:'center', gap:8 }}>
