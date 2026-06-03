@@ -6,6 +6,13 @@ import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
+import MangaSearch from './pages/MangaSearch';
+// ...
+// nel menu/sidebar:
+<button onClick={() => setView('explore')}>Esplora</button>
+// nel main render:
+{view === 'explore' && <MangaSearch />}
+
 
 export default function App() {
   const [user, setUser] = React.useState(null);
