@@ -1,0 +1,14 @@
+name: sync-manga
+on:
+  schedule:
+    - cron: '0 */6 * * *' # ogni 6 ore
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call AniList sync
+        run: |
+          curl -s -X POST "https://your-site.vercel.app/api/sync/anilist" -H "x-sync-token: ${{ secrets.SYNC_SECRET }}"
+      - name: Call MangaDex sync
+        run: |
+          curl -s -X POST "https://your-site.vercel.app/api/sync/mangadex" -H "x-sync-token: ${{ secrets.SYNC_SECRET }}"
