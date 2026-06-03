@@ -1,88 +1,42 @@
 import React from 'react';
-import { supabase } from '../supabase';
+import MangaLibrary from '../components/MangaLibrary';
+import Header from '../components/Header';
 
-export default function Profile({ user }) {
-  const [loading, setLoading] = React.useState(false);
-  const [profile, setProfile] = React.useState({ email: '', full_name: '', role: 'user' });
-  const [editing, setEditing] = React.useState(false);
-  const [isAdmin, setIsAdmin] = React.useState(false);
-
-  React.useEffect(() => {
-    if (!user?.id) return;
-    fetchProfile();
-  }, [user]);
-
-  async function fetchProfile() {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id,email,full_name,role')
-      .eq('id', user.id)
-      .single();
-    if (error) {
-      console.log('fetchProfile error', error.message);
-      return;
-    }
-    setProfile({ email: data.email, full_name: data.full_name, role: data.role });
-    setIsAdmin(data.role === 'admin');
-  }
-
-  async function saveProfile(e) {
-    e?.preventDefault();
-    setLoading(true);
-    const { error } = await supabase.from('profiles').update({
-      full_name: profile.full_name
-    }).eq('id', user.id);
-    setLoading(false);
-    if (error) return alert('Errore salvataggio: ' + error.message);
-    setEditing(false);
-    alert('Profilo aggiornato.');
+export default function Profile({ user, setView }) {
+  if (!user) {
+    return (
+      <div style={{ padding: 20 }}>
+        <h2>Profilo</h2>
+        <p>Devi essere loggato per vedere il profilo.</p>
+      </div>
+    );
   }
 
   return (
-    <div style={{ maxWidth:720, margin:'40px auto', padding:20 }}>
-      <h2>Benvenuto</h2>
-
-      <div style={{ marginBottom:12 }}>
-        <strong>Email:</strong> <span style={{ marginLeft:8 }}>{profile.email}</span>
+    <div style={{ padding: 20, maxWidth: 1100, margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+        <div>
+          <h2 style={{ margin: 0 }}>{user.user_metadata?.full_name || user.email || 'Utente'}</h2>
+          <div style={{ color: '#666', fontSize: 13, marginTop: 6 }}>ID: {user.id}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setView && setView('explore')}>Esplora</button>
+          <button onClick={() => setView && setView('dashboard')}>Dashboard</button>
+        </div>
       </div>
 
-      <form onSubmit={saveProfile}>
-        <div style={{ marginBottom:12 }}>
-          <strong>Nome:</strong>
-          {!editing ? (
-            <span style={{ marginLeft:8 }}>{profile.full_name || '—'}</span>
-          ) : (
-            <input
-              value={profile.full_name || ''}
-              onChange={e => setProfile({ ...profile, full_name: e.target.value })}
-              style={{ marginLeft:8, padding:6 }}
-            />
-          )}
-        </div>
+      <section style={{ marginBottom: 28 }}>
+        <h3 style={{ marginTop: 0 }}>La tua Libreria</h3>
+        <MangaLibrary user={user} />
+      </section>
 
-        <div style={{ marginBottom:12 }}>
-          <strong>Ruolo:</strong> <span style={{ marginLeft:8 }}>{profile.role}</span>
+      <section style={{ marginTop: 28 }}>
+        <h3>Impostazioni</h3>
+        <div style={{ color: '#666', fontSize: 14 }}>
+          <div>Email: <strong style={{ color: '#222' }}>{user.email}</strong></div>
+          <div style={{ marginTop: 8 }}>Puoi gestire le tue preferenze qui in futuro.</div>
         </div>
-
-        <div style={{ display:'flex', gap:10 }}>
-          {!editing ? (
-            <button type="button" onClick={() => setEditing(true)} style={{ padding:10 }}>Modifica profilo</button>
-          ) : (
-            <>
-              <button type="submit" disabled={loading} style={{ padding:10 }}>
-                {loading ? 'Salvataggio...' : 'Salva'}
-              </button>
-              <button type="button" onClick={() => setEditing(false)} style={{ padding:10 }}>Annulla</button>
-            </>
-          )}
-        </div>
-      </form>
-
-      {isAdmin && (
-        <div style={{ marginTop:24 }}>
-          <strong>Sei admin</strong>
-        </div>
-      )}
+      </section>
     </div>
   );
 }
