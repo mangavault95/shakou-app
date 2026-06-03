@@ -38,56 +38,49 @@ export default function Profile({ user }) {
     alert('Profilo aggiornato.');
   }
 
-  async function signOut() {
-    setLoading(true);
-    await supabase.auth.signOut();
-    setLoading(false);
-  }
-
   return (
     <div style={{ maxWidth:720, margin:'40px auto', padding:20 }}>
       <h2>Benvenuto</h2>
 
       <div style={{ marginBottom:12 }}>
-        <strong>Email:</strong> {profile.email}
+        <strong>Email:</strong> <span style={{ marginLeft:8 }}>{profile.email}</span>
       </div>
 
-      <div style={{ marginBottom:12 }}>
-        <strong>Nome:</strong>
-        {!editing ? (
-          <span style={{ marginLeft:8 }}>{profile.full_name || '—'}</span>
-        ) : (
-          <input
-            value={profile.full_name || ''}
-            onChange={e => setProfile({ ...profile, full_name: e.target.value })}
-            style={{ marginLeft:8, padding:6 }}
-          />
-        )}
-      </div>
+      <form onSubmit={saveProfile}>
+        <div style={{ marginBottom:12 }}>
+          <strong>Nome:</strong>
+          {!editing ? (
+            <span style={{ marginLeft:8 }}>{profile.full_name || '—'}</span>
+          ) : (
+            <input
+              value={profile.full_name || ''}
+              onChange={e => setProfile({ ...profile, full_name: e.target.value })}
+              style={{ marginLeft:8, padding:6 }}
+            />
+          )}
+        </div>
 
-      <div style={{ marginBottom:12 }}>
-        <strong>Ruolo:</strong> <span style={{ marginLeft:8 }}>{profile.role}</span>
-      </div>
+        <div style={{ marginBottom:12 }}>
+          <strong>Ruolo:</strong> <span style={{ marginLeft:8 }}>{profile.role}</span>
+        </div>
 
-      <div style={{ display:'flex', gap:10 }}>
-        {!editing ? (
-          <button onClick={() => setEditing(true)} style={{ padding:10 }}>Modifica profilo</button>
-        ) : (
-          <>
-            <button onClick={saveProfile} disabled={loading} style={{ padding:10 }}>
-              {loading ? 'Salvataggio...' : 'Salva'}
-            </button>
-            <button onClick={() => setEditing(false)} style={{ padding:10 }}>Annulla</button>
-          </>
-        )}
-        <button onClick={signOut} disabled={loading} style={{ padding:10 }}>
-          {loading ? 'Uscita...' : 'Sign out'}
-        </button>
-      </div>
+        <div style={{ display:'flex', gap:10 }}>
+          {!editing ? (
+            <button type="button" onClick={() => setEditing(true)} style={{ padding:10 }}>Modifica profilo</button>
+          ) : (
+            <>
+              <button type="submit" disabled={loading} style={{ padding:10 }}>
+                {loading ? 'Salvataggio...' : 'Salva'}
+              </button>
+              <button type="button" onClick={() => setEditing(false)} style={{ padding:10 }}>Annulla</button>
+            </>
+          )}
+        </div>
+      </form>
 
       {isAdmin && (
         <div style={{ marginTop:24 }}>
-          <a href="/admin" style={{ color:'#0070f3' }}>Vai alla console Admin</a>
+          <strong>Sei admin</strong>
         </div>
       )}
     </div>
