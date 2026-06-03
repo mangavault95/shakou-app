@@ -4,14 +4,12 @@ import MangaLibrary from '../components/MangaLibrary';
 import Header from '../components/Header';
 
 function formatDisplayName(user) {
-  const name = user?.user_metadata?.full_name || user?.email || '';
-  if (!name) return 'Utente';
-  // se è un'email, prendi la parte prima della @
-  if (name.includes('@')) {
-    const local = name.split('@')[0];
-    return local.charAt(0).toUpperCase() + local.slice(1);
-  }
-  return name;
+  const metaName = user?.user_metadata?.full_name;
+  if (metaName) return metaName;
+  const email = user?.email || '';
+  if (!email) return 'Utente';
+  const local = email.split('@')[0];
+  return local.charAt(0).toUpperCase() + local.slice(1);
 }
 
 export default function Profile({ user, setView, setSelectedManga }) {
@@ -33,7 +31,7 @@ export default function Profile({ user, setView, setSelectedManga }) {
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>
-          {/* Rimosse le voci duplicate a sinistra; qui rimangono solo azioni contestuali */}
+          {/* Azioni contestuali: mantieni solo qui, non duplicare nella sidebar */}
           <button onClick={() => setView && setView('explore')}>Vai a Esplora</button>
           <button onClick={() => setView && setView('dashboard')}>Vai a Dashboard</button>
         </div>
