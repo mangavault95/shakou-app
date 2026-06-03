@@ -1,5 +1,4 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Login from './pages/Login';
 import Profile from './pages/Profile';
 import Admin from './pages/Admin';
@@ -8,6 +7,7 @@ import { supabase } from './supabase';
 export default function App() {
   const [user, setUser] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
+  const [view, setView] = React.useState('home'); // 'home' | 'admin' | 'login'
 
   React.useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -19,7 +19,7 @@ export default function App() {
 
     async function handleSessionFromUrl() {
       try {
-        const { data, error } = await supabase.auth.getSessionFromUrl({ storeSession: true });
+        const { data } = await supabase.auth.getSessionFromUrl({ storeSession: true });
         if (data?.session) setUser(data.session.user);
       } catch (e) {
         console.log(e);
@@ -35,13 +35,28 @@ export default function App() {
 
   if (loading) return <div style={{padding:20}}>Caricamento...</div>;
 
+  // semplice navigazione interna
+  if (!user) return <Login />;
+
+  // se sei admin e vuoi vedere admin
+  if (view === 'admin') return (
+    <div>
+      <div style={{ padding: 12 }}>
+        <button onClick={() => setView('home')} style={{ marginRight:8 }}>Torna al profilo</button>
+        <button onClick={() => supabase.auth.signOut()}>Sign out</button>
+      </div>
+      <Admin />
+    </div>
+  );
+
+  // view = home (profilo)
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={user ? <Profile user={user} /> : <Login />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/admin" element={<Admin />} />
-      </Routes>
-    </BrowserRouter>
+    <div>
+      <div style={{ padding: 12 }}>
+        <button onClick={() => setView('admin')} style={{ marginRight:8 }}>Admin Console</button>
+        <button onClick={() => supabase.auth.signOut()}>Sign out</button>
+      </div>
+      <Profile user={user} />
+    </div>
   );
 }
