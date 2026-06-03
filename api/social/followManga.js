@@ -1,11 +1,17 @@
-// /api/social/followManga.js
-import { supabaseUpsertSingle } from '../_supabaseService.js'; // se _supabaseService.js è in /api
+// api/social/followManga.js
+import { supabaseUpsertSingle } from '../_supabaseService.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' });
 
   try {
-    const { user_id, manga } = req.body;
+    const body = req.body || (await new Promise(r => {
+      let data = '';
+      req.on('data', chunk => data += chunk);
+      req.on('end', () => r(JSON.parse(data || '{}')));
+    }));
+
+    const { user_id, manga } = body;
     if (!user_id || !manga?.external_id) return res.status(400).json({ error: 'missing user_id or manga.external_id' });
 
     // upsert manga in public.manga
@@ -16,6 +22,7 @@ export default async function handler(req, res) {
       cover_url: manga.cover_url || null,
       last_synced: new Date().toISOString()
     };
+
     const upserted = await supabaseUpsertSingle('manga', mangaRow, 'external_id,source');
 
     // upsert user_manga
@@ -34,7 +41,8 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ ok: true, manga: upserted, user_manga: userManga });
   } catch (err) {
-    console.error('followManga error', err);
-    return res.status(500).json({ error: String(err) });
+    console.error('followManga error:', err && (err.stack || err.message || err));
+    // restituisci sempre JSON leggibile dal client
+    return res.status(500).json({ error: 'internal_server_error', detail: String(err && (err.message || err)) });
   }
 }
