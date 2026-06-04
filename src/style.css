@@ -25,3 +25,8 @@ button {
 a { color: inherit; text-decoration: none; }
 
 img { max-width: 100%; display: block; }
+/* Ensure header and avatar are above other page elements */
+header { z-index: 3000; }
+
+/* If a profile rectangle overlays the avatar, keep it below the header */
+.profile-rect, .search-box { z-index: 100; pointer-events: auto; }
