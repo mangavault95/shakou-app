@@ -1,8 +1,10 @@
 // api/sync/anilist.js
 import { supabaseUpsertSingle } from './_supabaseService.js';
+import { translateText } from '../utils/translate.js';
 
 const ANILIST_URL = process.env.ANILIST_GRAPHQL_URL || 'https://graphql.anilist.co';
 const SYNC_SECRET = process.env.SYNC_SECRET;
+const TARGET_LANG = process.env.SYNC_TARGET_LANG || 'it'; // lingua di destinazione per le traduzioni
 
 function normalizeTitle(titleObj) {
   return {
@@ -13,12 +15,10 @@ function normalizeTitle(titleObj) {
 }
 
 export default async function handler(req, res) {
-  // protect endpoint
   const token = req.headers['x-sync-token'];
   if (!token || token !== SYNC_SECRET) return res.status(401).json({ error: 'unauthorized' });
 
   try {
-    // Example: fetch first page of manga (adjust pagination as needed)
     const query = `
       query ($page:Int, $perPage:Int) {
         Page(page:$page, perPage:$perPage) {
@@ -30,6 +30,7 @@ export default async function handler(req, res) {
             genres
             status
             popularity
+            isAdult
             startDate { year month day }
             coverImage { large medium }
             staff { edges { node { id name { full } } } }
@@ -47,8 +48,24 @@ export default async function handler(req, res) {
     if (json.errors) throw new Error(JSON.stringify(json.errors));
 
     const media = json.data.Page.media || [];
+    let count = 0;
     for (const m of media) {
+      // skip adult content
+      if (m.isAdult) continue;
+
       const authors = (m.staff?.edges || []).map(e => ({ id: e.node.id, name: e.node.name?.full }));
+      const synopsis = m.description || null;
+
+      // optional: translate synopsis/title if not in target language
+      let translatedSynopsis = null;
+      if (synopsis) {
+        try {
+          translatedSynopsis = await translateText(synopsis, TARGET_LANG);
+        } catch (e) {
+          translatedSynopsis = null;
+        }
+      }
+
       const row = {
         external_id: String(m.id),
         source: 'anilist',
@@ -56,16 +73,18 @@ export default async function handler(req, res) {
         alt_titles: JSON.stringify(m.synonyms || []),
         authors: JSON.stringify(authors),
         genres: m.genres || [],
-        synopsis: m.description || null,
+        synopsis: synopsis,
+        synopsis_translated: translatedSynopsis,
         cover_url: m.coverImage?.large || m.coverImage?.medium || null,
         status: m.status || null,
         popularity_score: m.popularity || null,
         last_synced: new Date().toISOString()
       };
       await supabaseUpsertSingle('manga', row, 'external_id,source');
+      count++;
     }
 
-    return res.status(200).json({ ok: true, count: media.length });
+    return res.status(200).json({ ok: true, count });
   } catch (err) {
     console.error('syncAnilist error', err);
     return res.status(500).json({ error: String(err) });
