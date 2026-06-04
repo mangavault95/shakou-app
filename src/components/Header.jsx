@@ -18,7 +18,6 @@ export default function Header({ user, onLogout, setView }) {
   }, []);
 
   function toggleMenu(e) {
-    // evita che altri listener (es. overlay) intercettino il click
     e.stopPropagation();
     e.preventDefault();
     setOpen(o => !o);
@@ -43,17 +42,19 @@ export default function Header({ user, onLogout, setView }) {
         top: 0,
         left: 220,
         right: 0,
-        zIndex: 1200 // molto alto per sovrastare overlay
+        zIndex: 3000
       }}
     >
       <div style={{ fontWeight: 700, fontSize: 18 }}>Shakou</div>
 
-      <div ref={ref} style={{ position: 'relative', zIndex: 1300 }}>
+      <div ref={ref} style={{ position: 'relative', zIndex: 3100 }}>
         <button
           onClick={toggleMenu}
           aria-haspopup="true"
           aria-expanded={open}
           style={{
+            position: 'relative',
+            zIndex: 3200,
             width: 40,
             height: 40,
             borderRadius: '50%',
@@ -65,7 +66,8 @@ export default function Header({ user, onLogout, setView }) {
             fontWeight: 700,
             border: 'none',
             padding: 0,
-            userSelect: 'none'
+            userSelect: 'none',
+            pointerEvents: 'auto'
           }}
         >
           {user ? (user.user_metadata?.avatar_url ? (
@@ -93,7 +95,7 @@ export default function Header({ user, onLogout, setView }) {
               display: 'flex',
               flexDirection: 'column',
               gap: 6,
-              zIndex: 1400
+              zIndex: 3300
             }}
             onClick={e => e.stopPropagation()}
           >
