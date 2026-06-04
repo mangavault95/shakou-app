@@ -30,3 +30,14 @@ header { z-index: 3000; }
 
 /* If a profile rectangle overlays the avatar, keep it below the header */
 .profile-rect, .search-box { z-index: 100; pointer-events: auto; }
+
+/* Force profile menu buttons visible for debugging/fix */
+header [role="menu"] button {
+  color: #222 !important;
+  background: transparent !important;
+  font-size: 14px !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  text-indent: 0 !important;
+  line-height: 1.2 !important;
+}
