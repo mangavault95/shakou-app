@@ -17,7 +17,11 @@ export default async function handler(req, res) {
       .eq('id', id)
       .single();
 
-    if (mangaErr) return res.status(500).json({ error: mangaErr.message });
+    if (mangaErr) {
+      if (mangaErr.code === 'PGRST116') return res.status(404).json({ error: 'not found' });
+      return res.status(500).json({ error: mangaErr.message });
+    }
+    if (!manga) return res.status(404).json({ error: 'not found' });
 
     // counts
     const { count: volumesCount } = await supabase
@@ -38,7 +42,7 @@ export default async function handler(req, res) {
       .order('volume_number', { ascending: true })
       .limit(50);
 
-    // add chapters_count per volume
+    // add chapters_count per volume (safe)
     const volumesWithCounts = await Promise.all((volumes || []).map(async v => {
       const { count } = await supabase
         .from('chapters')
