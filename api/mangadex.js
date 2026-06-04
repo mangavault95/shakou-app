@@ -1,18 +1,17 @@
 // api/sync/mangadex.js
 import { supabaseUpsertSingle } from './_supabaseService.js';
+import { translateText } from '../utils/translate.js';
 
-const MANG ADEX_BASE = process.env.MANG ADEX_BASE_URL || 'https://api.mangadex.org';
+const MANG ADEX_BASE = process.env.MANG ADEX_BASE_URL || 'https://api.mangadex.org'; // se il tuo env usa nome diverso, correggi
 const SYNC_SECRET = process.env.SYNC_SECRET;
+const TARGET_LANG = process.env.SYNC_TARGET_LANG || 'it';
 
 export default async function handler(req, res) {
   const token = req.headers['x-sync-token'];
   if (!token || token !== SYNC_SECRET) return res.status(401).json({ error: 'unauthorized' });
 
   try {
-    // Example: get list of manga ids from our DB that need chapter sync
-    // For simplicity, fetch recent manga with source 'mangadex' or external mapping
-    // Here we assume manga.external_id contains MangaDex id when source='mangadex'
-    // If you use AniList->MangaDex mapping, implement mapping table.
+    // fetch manga list from supabase (manga with source mangadex)
     const supRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/manga?select=id,external_id,source&source=eq.mangadex`, {
       headers: {
         apikey: process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -24,7 +23,51 @@ export default async function handler(req, res) {
     for (const m of mangas) {
       const mdId = m.external_id;
       if (!mdId) continue;
-      // fetch chapters for manga
+
+      // fetch manga details
+      const mdMetaRes = await fetch(`${MANG ADEX_BASE}/manga/${mdId}`);
+      const mdMetaJson = await mdMetaRes.json();
+      const mdAttr = mdMetaJson.data?.attributes || {};
+      const contentRating = (mdAttr.contentRating || '').toLowerCase();
+
+      // skip erotica/pornographic
+      if (contentRating === 'erotica' || contentRating === 'pornographic') continue;
+
+      const titleObj = mdAttr.title || {};
+      const synopsis = mdAttr.description?.en || mdAttr.description?.it || null;
+
+      // translate synopsis if needed
+      let translatedSynopsis = null;
+      if (synopsis) {
+        try { translatedSynopsis = await translateText(synopsis, TARGET_LANG); } catch (e) { translatedSynopsis = null; }
+      }
+
+      // cover: MangaDex uses relationships to get cover art; fetch cover if present
+      let coverUrl = null;
+      const coverRel = (mdMetaJson.data?.relationships || []).find(r => r.type === 'cover_art');
+      if (coverRel && coverRel.id) {
+        // get cover image
+        coverUrl = `${process.env.MANG ADEX_CDN || 'https://uploads.mangadex.org'}/covers/${mdId}/${coverRel.attributes?.fileName || ''}`;
+      }
+
+      const row = {
+        external_id: String(mdId),
+        source: 'mangadex',
+        title: { romaji: titleObj.en || null, english: titleObj.en || null, native: titleObj.jp || null },
+        alt_titles: JSON.stringify([]),
+        authors: JSON.stringify([]),
+        genres: mdAttr.tags ? mdAttr.tags.map(t => t.name?.en || t.name?.it || t.name?.ja).filter(Boolean) : [],
+        synopsis: synopsis,
+        synopsis_translated: translatedSynopsis,
+        cover_url: coverUrl,
+        status: mdAttr.status || null,
+        popularity_score: null,
+        last_synced: new Date().toISOString()
+      };
+
+      await supabaseUpsertSingle('manga', row, 'external_id,source');
+
+      // chapters sync (existing logic, but ensure translatedLanguage filter)
       const chRes = await fetch(`${MANG ADEX_BASE}/chapter?manga[]=${mdId}&limit=100&translatedLanguage[]=en`);
       const chJson = await chRes.json();
       const chapters = chJson.data || [];
