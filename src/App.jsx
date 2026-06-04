@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import MangaSearch from './pages/MangaSearch';
 import MangaDetail from './pages/MangaDetail';
+import Login from './pages/Login';
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -45,9 +46,12 @@ export default function App() {
     };
   }, []);
 
-  function handleLogout() {
-    // sign out from supabase and clear local state
-    supabase.auth.signOut().catch(() => {});
+  async function handleLogout() {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      // ignore
+    }
     setUser(null);
     setView('explore');
   }
@@ -79,6 +83,7 @@ export default function App() {
             setView={setView}
           />
         )}
+        {view === 'login' && <Login setView={setView} setUser={setUser} supabase={supabase} />}
         {view === 'admin' && <div>Admin (in costruzione)</div>}
         {view === 'settings' && <div>Impostazioni (in costruzione)</div>}
       </main>
