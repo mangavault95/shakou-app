@@ -35,9 +35,11 @@ export default function Header({ user, onLogout, setView }) {
       alignItems: 'center',
       justifyContent: 'space-between',
       borderBottom: '1px solid #eee',
-      marginLeft: 220,
       background: '#fff',
-      position: 'relative',
+      position: 'fixed',
+      top: 0,
+      left: 220,
+      right: 0,
       zIndex: 100
     }}>
       <div style={{ fontWeight: 700, fontSize: 18 }}>Shakou</div>
@@ -83,9 +85,7 @@ export default function Header({ user, onLogout, setView }) {
               <>
                 <button onClick={() => go('profile')} style={{ padding: 8 }}>Profilo</button>
                 <button onClick={() => go('settings')} style={{ padding: 8 }}>Impostazioni</button>
-                {isAdmin && (
-                  <button onClick={() => go('admin')} style={{ padding: 8 }}>Admin Panel</button>
-                )}
+                {isAdmin && <button onClick={() => go('admin')} style={{ padding: 8 }}>Admin Panel</button>}
                 <button onClick={onLogout} style={{ padding: 8, color: 'red' }}>Logout</button>
               </>
             )}
