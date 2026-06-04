@@ -5,7 +5,6 @@ export default function Sidebar({ setView, currentView }) {
   const items = [
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'explore', label: 'Esplora' }
-    // non inserire Profilo/Admin/Impostazioni qui per evitare duplicati
   ];
 
   return (
@@ -13,7 +12,6 @@ export default function Sidebar({ setView, currentView }) {
       width: 220,
       minHeight: '100vh',
       padding: 16,
-      boxSizing: 'border-box',
       borderRight: '1px solid #eee',
       background: '#fff',
       position: 'fixed',
@@ -29,7 +27,7 @@ export default function Sidebar({ setView, currentView }) {
       {items.map(it => (
         <button
           key={it.key}
-          onClick={() => setView && setView(it.key)}
+          onClick={() => setView(it.key)}
           style={{
             textAlign: 'left',
             padding: '10px 12px',
@@ -37,8 +35,7 @@ export default function Sidebar({ setView, currentView }) {
             border: 'none',
             background: currentView === it.key ? '#f44336' : '#fff',
             color: currentView === it.key ? '#fff' : '#222',
-            cursor: 'pointer',
-            transition: '0.15s'
+            cursor: 'pointer'
           }}
         >
           {it.label}
