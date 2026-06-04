@@ -33,21 +33,28 @@ export default async function handler(req, res) {
       const token = authHeader.replace('Bearer ', '').trim();
       if (!token) return res.status(401).json({ error: 'missing auth token' });
 
-      // verify user token
+      // verify user token using a client created with the user's token
       const authClient = createClient(SUPABASE_URL, token);
       const { data: userData, error: userErr } = await authClient.auth.getUser();
       if (userErr || !userData?.user) return res.status(401).json({ error: 'invalid token' });
 
       const user = userData.user;
-      const { body, parent_id } = req.body || {};
-      if (!body || typeof body !== 'string' || body.trim().length === 0) {
+
+      // safe body parsing (some hosts send string)
+      let payload = req.body || {};
+      if (typeof payload === 'string') {
+        try { payload = JSON.parse(payload); } catch (e) { /* ignore */ }
+      }
+      const { body: text, parent_id } = payload;
+
+      if (!text || typeof text !== 'string' || text.trim().length === 0) {
         return res.status(400).json({ error: 'empty body' });
       }
 
       const insert = {
         user_id: user.id,
         chapter_id: id,
-        body: body.trim(),
+        body: text.trim(),
         parent_id: parent_id || null,
         visibility: 'public',
         created_at: new Date().toISOString(),
