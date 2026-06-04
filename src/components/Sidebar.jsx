@@ -12,6 +12,7 @@ export default function Sidebar({ setView, currentView }) {
       width: 220,
       minHeight: '100vh',
       padding: 16,
+      boxSizing: 'border-box',
       borderRight: '1px solid #eee',
       background: '#fff',
       position: 'fixed',
