@@ -4,19 +4,23 @@ import React from 'react';
 export default function Header({ user, onLogout, setView }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef(null);
+
   const isAdmin = user?.user_metadata?.role === 'admin';
 
   React.useEffect(() => {
-    function onDocClick(e) {
-      if (!ref.current) return;
-      if (!ref.current.contains(e.target)) setOpen(false);
+    function handleClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+      }
     }
-    document.addEventListener('click', onDocClick);
-    return () => document.removeEventListener('click', onDocClick);
+    document.addEventListener('click', handleClickOutside, true);
+    return () => document.removeEventListener('click', handleClickOutside, true);
   }, []);
 
   function toggleMenu(e) {
+    // evita che altri listener (es. overlay) intercettino il click
     e.stopPropagation();
+    e.preventDefault();
     setOpen(o => !o);
   }
 
@@ -26,31 +30,32 @@ export default function Header({ user, onLogout, setView }) {
   }
 
   return (
-    <header style={{
-      height: 64,
-      padding: '12px 20px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      borderBottom: '1px solid #eee',
-      background: '#fff',
-      position: 'fixed',
-      top: 0,
-      left: 220,
-      right: 0,
-      zIndex: 100
-    }}>
+    <header
+      style={{
+        height: 64,
+        padding: '12px 20px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottom: '1px solid #eee',
+        background: '#fff',
+        position: 'fixed',
+        top: 0,
+        left: 220,
+        right: 0,
+        zIndex: 1200 // molto alto per sovrastare overlay
+      }}
+    >
       <div style={{ fontWeight: 700, fontSize: 18 }}>Shakou</div>
 
-      <div ref={ref} style={{ position: 'relative' }}>
-        <div
+      <div ref={ref} style={{ position: 'relative', zIndex: 1300 }}>
+        <button
           onClick={toggleMenu}
-          role="button"
           aria-haspopup="true"
           aria-expanded={open}
           style={{
-            width: 38,
-            height: 38,
+            width: 40,
+            height: 40,
             borderRadius: '50%',
             background: '#ddd',
             cursor: 'pointer',
@@ -58,29 +63,40 @@ export default function Header({ user, onLogout, setView }) {
             alignItems: 'center',
             justifyContent: 'center',
             fontWeight: 700,
+            border: 'none',
+            padding: 0,
             userSelect: 'none'
           }}
         >
           {user ? (user.user_metadata?.avatar_url ? (
-            <img src={user.user_metadata.avatar_url} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+            <img
+              src={user.user_metadata.avatar_url}
+              alt="avatar"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+            />
           ) : user.email[0].toUpperCase()) : 'G'}
-        </div>
+        </button>
 
         {open && (
-          <div style={{
-            position: 'absolute',
-            right: 0,
-            top: 48,
-            background: '#fff',
-            border: '1px solid #eee',
-            borderRadius: 8,
-            boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
-            width: 220,
-            padding: 8,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 6
-          }}>
+          <div
+            role="menu"
+            style={{
+              position: 'absolute',
+              right: 0,
+              top: 48,
+              background: '#fff',
+              border: '1px solid #eee',
+              borderRadius: 8,
+              boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
+              width: 220,
+              padding: 8,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+              zIndex: 1400
+            }}
+            onClick={e => e.stopPropagation()}
+          >
             {!user && <button onClick={() => go('login')} style={{ padding: 8, textAlign: 'left' }}>Login</button>}
 
             {user && (
