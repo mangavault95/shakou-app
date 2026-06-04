@@ -8,26 +8,54 @@ import Profile from './pages/Profile';
 import MangaSearch from './pages/MangaSearch';
 import MangaDetail from './pages/MangaDetail';
 
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL || '',
+  import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+);
+
 export default function App() {
   const [view, setView] = React.useState('dashboard');
-  const [user, setUser] = React.useState(null); 
+  const [user, setUser] = React.useState(null);
   const [selectedManga, setSelectedManga] = React.useState(null);
 
-  function handleLogout() {
-    setUser(null);
-    setView('explore');
-  }
+  // Sync user with Supabase session and auth events
+  React.useEffect(() => {
+    let mounted = true;
 
-  function openSearch() {
+    async function init() {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const session = data?.session ?? null;
+        if (mounted) setUser(session?.user ?? null);
+      } catch (e) {
+        // ignore
+      }
+    }
+    init();
+
+    const { data: { subscription } = {} } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      mounted = false;
+      try { subscription?.unsubscribe(); } catch (e) {}
+    };
+  }, []);
+
+  function handleLogout() {
+    // sign out from supabase and clear local state
+    supabase.auth.signOut().catch(() => {});
+    setUser(null);
     setView('explore');
   }
 
   return (
     <div>
-     // snippet da usare in src/App.jsx
-<Sidebar setView={setView} currentView={view} />
-<Header user={user} onLogout={handleLogout} setView={setView} />
-
+      <Sidebar setView={setView} currentView={view} />
+      <Header user={user} onLogout={handleLogout} setView={setView} />
 
       <main style={{ marginLeft: 220, padding: 20, marginTop: 64 }}>
         {view === 'dashboard' && <Dashboard user={user} />}
