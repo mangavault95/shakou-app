@@ -210,7 +210,12 @@ export default function MangaDetail({ selectedManga, setView, user }) {
       </div>
 
       {externalId && (
-        <MangaSocial source={selectedManga.source || 'anilist'} externalId={externalId} user={user} />
+        <MangaSocial
+          source={selectedManga.source || 'anilist'}
+          externalId={externalId}
+          user={user}
+          title={m.title?.romaji || m.title?.english || title}
+        />
       )}
     </div>
   );

@@ -12,10 +12,14 @@ const tabStyle = (active) => ({
   cursor: 'pointer'
 });
 
-export default function MangaSocial({ source = 'anilist', externalId, user }) {
+export default function MangaSocial({ source = 'anilist', externalId, user, title }) {
   const [scope, setScope] = React.useState('manga'); // 'manga' | 'chapter'
   const [chapterInput, setChapterInput] = React.useState('');
   const [activeChapter, setActiveChapter] = React.useState(null);
+
+  const [chapterList, setChapterList] = React.useState([]);
+  const [chaptersLoading, setChaptersLoading] = React.useState(false);
+  const [chaptersLoaded, setChaptersLoaded] = React.useState(false);
 
   const [data, setData] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
@@ -52,6 +56,21 @@ export default function MangaSocial({ source = 'anilist', externalId, user }) {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, externalId, effScope, effNumber]);
+
+  // Carica la lista capitoli reale da MangaDex la prima volta che si apre la tab Capitolo
+  React.useEffect(() => {
+    if (scope !== 'chapter' || chaptersLoaded || !title) return;
+    let active = true;
+    setChaptersLoading(true);
+    const params = new URLSearchParams({ kind: 'chapters', external_id: String(externalId || ''), title });
+    fetch(`/api/manga-social?${params.toString()}`)
+      .then(r => r.json())
+      .then(j => { if (active) { setChapterList(j.chapters || []); setChaptersLoaded(true); } })
+      .catch(() => { if (active) setChaptersLoaded(true); })
+      .finally(() => { if (active) setChaptersLoading(false); });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, chaptersLoaded, title, externalId]);
 
   async function postAction(payload) {
     const token = await getAccessToken();
@@ -98,25 +117,47 @@ export default function MangaSocial({ source = 'anilist', externalId, user }) {
 
   return (
     <div style={{ marginTop: 28, borderTop: '1px solid #eee', paddingTop: 18 }}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <button onClick={() => setScope('manga')} style={tabStyle(scope === 'manga')}>Manga</button>
         <button onClick={() => setScope('chapter')} style={tabStyle(scope === 'chapter')}>Capitolo</button>
-        {scope === 'chapter' && (
-          <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <input
-              type="number"
-              min="1"
-              value={chapterInput}
-              onChange={e => setChapterInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') openChapter(); }}
-              placeholder="N°"
-              style={{ width: 70, padding: 6, border: '1px solid #eee', borderRadius: 6 }}
-            />
-            <button onClick={openChapter}>Apri</button>
-            {activeChapter && <span style={{ color: '#666', fontSize: 13 }}>Capitolo {activeChapter}</span>}
-          </span>
-        )}
       </div>
+
+      {scope === 'chapter' && (
+        <div style={{ marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {chaptersLoading && <span style={{ color: '#666', fontSize: 13 }}>Caricamento capitoli…</span>}
+
+          {!chaptersLoading && chapterList.length > 0 && (
+            <select
+              value={activeChapter ?? ''}
+              onChange={e => setActiveChapter(e.target.value ? Number(e.target.value) : null)}
+              style={{ padding: 8, borderRadius: 6, border: '1px solid #eee', minWidth: 220 }}
+            >
+              <option value="">Scegli un capitolo… ({chapterList.length})</option>
+              {chapterList.map(c => (
+                <option key={c.number} value={c.number}>
+                  Capitolo {c.number}{c.volume ? ` (Vol. ${c.volume})` : ''}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {!chaptersLoading && chaptersLoaded && chapterList.length === 0 && (
+            <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ color: '#666', fontSize: 13 }}>Lista non disponibile, inserisci il numero:</span>
+              <input
+                type="number"
+                min="1"
+                value={chapterInput}
+                onChange={e => setChapterInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') openChapter(); }}
+                placeholder="N°"
+                style={{ width: 70, padding: 6, border: '1px solid #eee', borderRadius: 6 }}
+              />
+              <button onClick={openChapter}>Apri</button>
+            </span>
+          )}
+        </div>
+      )}
 
       {scope === 'chapter' && activeChapter == null ? (
         <div style={{ color: '#666' }}>Inserisci il numero del capitolo per vedere voti e commenti.</div>

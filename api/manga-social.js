@@ -7,6 +7,47 @@
 // POST { action:'comment', source, external_id, scope, scope_number, body }
 import { admin, getUserFromRequest, parseBody, attachAuthors } from './_auth.js';
 
+const MANGADEX_BASE = process.env.MANGADEX_BASE_URL || 'https://api.mangadex.org';
+
+// Trova la controparte MangaDex di un manga AniList e ne ricava la lista capitoli.
+// Match affidabile: tra i risultati di ricerca per titolo, sceglie quello il cui
+// link AniList (attributes.links.al) combacia con il nostro external_id.
+async function fetchMangaDexChapters(anilistId, title) {
+  const headers = { 'User-Agent': 'Shakou/1.0 (manga social app)' };
+  const sRes = await fetch(`${MANGADEX_BASE}/manga?title=${encodeURIComponent(title)}&limit=10`, { headers });
+  const sJson = await sRes.json();
+  const candidates = sJson?.data || [];
+  if (!candidates.length) return { mangadex_id: null, chapters: [] };
+
+  const matched = candidates.find(c => String(c?.attributes?.links?.al || '') === String(anilistId));
+  const chosen = matched || candidates[0];
+  const mdId = chosen.id;
+
+  const aRes = await fetch(`${MANGADEX_BASE}/manga/${mdId}/aggregate?translatedLanguage[]=en`, { headers });
+  const aJson = await aRes.json();
+  const volumes = aJson?.volumes;
+  const volEntries = volumes && !Array.isArray(volumes) ? Object.values(volumes) : [];
+
+  const list = [];
+  const seen = new Set();
+  for (const vol of volEntries) {
+    const chapters = vol?.chapters;
+    const chEntries = chapters && !Array.isArray(chapters) ? Object.values(chapters) : [];
+    for (const ch of chEntries) {
+      const raw = ch?.chapter;
+      if (raw == null || raw === 'none') continue;
+      const n = Number(raw);
+      // scope_number e' integer: per ora elenchiamo solo i capitoli interi
+      if (!Number.isInteger(n)) continue;
+      if (seen.has(n)) continue;
+      seen.add(n);
+      list.push({ number: n, volume: vol?.volume && vol.volume !== 'none' ? vol.volume : null });
+    }
+  }
+  list.sort((a, b) => a.number - b.number);
+  return { mangadex_id: mdId, chapters: list, matched: Boolean(matched) };
+}
+
 function readScope(q) {
   const source = (q.source || '').toString();
   const external_id = (q.external_id || '').toString();
@@ -25,6 +66,20 @@ function applyScope(query, scope_number) {
 export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
+      // Lista capitoli reale da MangaDex (per il selettore "Capitolo")
+      if ((req.query.kind || '').toString() === 'chapters') {
+        const external_id = (req.query.external_id || '').toString();
+        const title = (req.query.title || '').toString().trim();
+        if (!title) return res.status(400).json({ error: 'missing title' });
+        try {
+          const result = await fetchMangaDexChapters(external_id, title);
+          return res.status(200).json({ ok: true, ...result });
+        } catch (e) {
+          console.error('mangadex chapters error', e);
+          return res.status(200).json({ ok: true, mangadex_id: null, chapters: [] });
+        }
+      }
+
       const { source, external_id, scope, scope_number } = readScope(req.query);
       if (!source || !external_id) return res.status(400).json({ error: 'missing source/external_id' });
       const user = await getUserFromRequest(req); // opzionale
