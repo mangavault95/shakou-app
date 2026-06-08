@@ -1,9 +1,9 @@
 // api/social/postComments.js
 // GET ?post_id=...  -> lista commenti di un post
 // POST { post_id, body } -> crea un commento (richiede token)
-import { admin, getUserFromRequest, parseBody } from '../_auth.js';
+import { admin, getUserFromRequest, parseBody, attachAuthors } from '../_auth.js';
 
-const SELECT = 'id, post_id, user_id, body, created_at, author:profiles!post_comments_user_id_fkey(id, full_name, email)';
+const SELECT = 'id, post_id, user_id, body, created_at';
 
 export default async function handler(req, res) {
   try {
@@ -16,7 +16,8 @@ export default async function handler(req, res) {
         .eq('post_id', post_id)
         .order('created_at', { ascending: true });
       if (error) throw error;
-      return res.status(200).json({ ok: true, comments: data || [] });
+      const comments = await attachAuthors(data || []);
+      return res.status(200).json({ ok: true, comments });
     }
 
     if (req.method === 'POST') {
@@ -31,7 +32,8 @@ export default async function handler(req, res) {
         .select(SELECT)
         .single();
       if (error) throw error;
-      return res.status(200).json({ ok: true, comment: data });
+      const [comment] = await attachAuthors([data]);
+      return res.status(200).json({ ok: true, comment });
     }
 
     return res.status(405).json({ error: 'method_not_allowed' });

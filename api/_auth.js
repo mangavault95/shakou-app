@@ -28,6 +28,18 @@ export async function getUserFromRequest(req) {
   }
 }
 
+// Allega l'autore (profilo) a una lista di righe, senza dipendere da una FK
+// PostgREST: fa una query separata su profiles e unisce in JS.
+export async function attachAuthors(rows, key = 'user_id') {
+  const list = rows || [];
+  const ids = [...new Set(list.map(r => r[key]).filter(Boolean))];
+  if (!ids.length) return list;
+  const { data: profs } = await admin.from('profiles').select('id, full_name, email').in('id', ids);
+  const map = {};
+  (profs || []).forEach(p => { map[p.id] = p; });
+  return list.map(r => ({ ...r, author: map[r[key]] || null }));
+}
+
 // Parsing sicuro del body (alcuni host lo passano come stringa).
 export function parseBody(req) {
   let payload = req.body || {};

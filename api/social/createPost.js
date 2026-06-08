@@ -1,5 +1,5 @@
 // api/social/createPost.js
-import { admin, getUserFromRequest, parseBody } from '../_auth.js';
+import { admin, getUserFromRequest, parseBody, attachAuthors } from '../_auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' });
@@ -17,10 +17,11 @@ export default async function handler(req, res) {
     const { data, error } = await admin
       .from('posts')
       .insert([{ user_id: user.id, content: text, manga_id: manga_id || null, visibility: vis }])
-      .select('id, user_id, content, manga_id, visibility, created_at, author:profiles!posts_user_id_fkey(id, full_name, email)')
+      .select('id, user_id, content, manga_id, visibility, created_at')
       .single();
     if (error) throw error;
-    return res.status(200).json({ ok: true, post: data });
+    const [post] = await attachAuthors([data]);
+    return res.status(200).json({ ok: true, post });
   } catch (err) {
     console.error('createPost error', err);
     return res.status(500).json({ error: String(err.message || err) });

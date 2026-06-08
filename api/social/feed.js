@@ -1,7 +1,7 @@
 // api/social/feed.js
 // Ritorna i post visibili al lettore: pubblici di chiunque + 'followers' di chi
 // segue (e i propri), con autore, conteggi like/commenti e flag liked_by_me.
-import { admin, getUserFromRequest } from '../_auth.js';
+import { admin, getUserFromRequest, attachAuthors } from '../_auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'method_not_allowed' });
@@ -22,7 +22,7 @@ export default async function handler(req, res) {
 
     let query = admin
       .from('posts')
-      .select('id, user_id, content, manga_id, visibility, created_at, author:profiles!posts_user_id_fkey(id, full_name, email)')
+      .select('id, user_id, content, manga_id, visibility, created_at')
       .order('created_at', { ascending: false })
       .limit(50);
 
@@ -50,7 +50,8 @@ export default async function handler(req, res) {
       (cmts || []).forEach(c => { commentCounts[c.post_id] = (commentCounts[c.post_id] || 0) + 1; });
     }
 
-    const out = (posts || []).map(p => ({
+    const withAuthors = await attachAuthors(posts || []);
+    const out = withAuthors.map(p => ({
       ...p,
       like_count: likeCounts[p.id] || 0,
       comment_count: commentCounts[p.id] || 0,
