@@ -57,7 +57,7 @@ export default function App() {
       <Header user={user} onLogout={handleLogout} setView={setView} />
 
       <main style={{ marginLeft: 220, padding: 20, marginTop: 64 }}>
-        {view === 'dashboard' && <Dashboard user={user} />}
+        {view === 'dashboard' && <Dashboard user={user} setView={setView} />}
         {view === 'profile' && (
           <Profile
             user={user}

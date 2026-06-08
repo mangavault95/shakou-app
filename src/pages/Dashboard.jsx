@@ -1,9 +1,11 @@
 import React from 'react';
 import { supabase } from '../supabase';
 
-export default function Dashboard({ onNavigate }) {
+export default function Dashboard({ user, setView }) {
   const [stats, setStats] = React.useState({ users: 0, admins: 0 });
   const [recent, setRecent] = React.useState([]);
+
+  const isAdmin = user?.user_metadata?.role === 'admin';
 
   React.useEffect(() => {
     fetchStats();
@@ -27,6 +29,10 @@ export default function Dashboard({ onNavigate }) {
     setRecent(data || []);
   }
 
+  function go(view) {
+    if (setView) setView(view);
+  }
+
   return (
     <div style={{ padding:20 }}>
       <h2>Panoramica</h2>
@@ -43,7 +49,11 @@ export default function Dashboard({ onNavigate }) {
         <div style={{ flex:1, padding:16, border:'1px solid #eee', borderRadius:8 }}>
           <div style={{ color:'#666' }}>Azioni rapide</div>
           <div style={{ marginTop:8 }}>
-            <button onClick={() => onNavigate('admin')} style={{ padding:8 }}>Apri Admin Console</button>
+            {isAdmin ? (
+              <button onClick={() => go('admin')} style={{ padding:8 }}>Apri Admin Console</button>
+            ) : (
+              <button onClick={() => go('explore')} style={{ padding:8 }}>Esplora manga</button>
+            )}
           </div>
         </div>
       </div>
@@ -66,6 +76,9 @@ export default function Dashboard({ onNavigate }) {
                 <td style={{ padding:8 }}>{new Date(r.created_at).toLocaleString()}</td>
               </tr>
             ))}
+            {recent.length === 0 && (
+              <tr><td colSpan={3} style={{ padding:8, color:'#666' }}>Nessun utente da mostrare.</td></tr>
+            )}
           </tbody>
         </table>
       </section>
