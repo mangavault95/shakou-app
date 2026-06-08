@@ -1,4 +1,5 @@
-// src/utils/translate.js
+// api/_translate.js
+// Util di traduzione lato server (LibreTranslate o Google Translate).
 export async function translateText(text, target = 'it') {
   if (!text) return null;
 

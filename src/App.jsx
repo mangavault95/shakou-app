@@ -9,12 +9,7 @@ import MangaSearch from './pages/MangaSearch';
 import MangaDetail from './pages/MangaDetail';
 import Login from './pages/Login';
 
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL || '',
-  import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-);
+import { supabase } from './supabase';
 
 export default function App() {
   const [view, setView] = React.useState('dashboard');

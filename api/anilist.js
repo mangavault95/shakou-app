@@ -1,6 +1,6 @@
-// api/sync/anilist.js
+// api/anilist.js
 import { supabaseUpsertSingle } from './_supabaseService.js';
-import { translateText } from '../utils/translate.js';
+import { translateText } from './_translate.js';
 
 const ANILIST_URL = process.env.ANILIST_GRAPHQL_URL || 'https://graphql.anilist.co';
 const SYNC_SECRET = process.env.SYNC_SECRET;

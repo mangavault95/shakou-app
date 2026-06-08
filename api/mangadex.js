@@ -1,8 +1,8 @@
-// api/sync/mangadex.js
+// api/mangadex.js
 import { supabaseUpsertSingle } from './_supabaseService.js';
-import { translateText } from '../utils/translate.js';
+import { translateText } from './_translate.js';
 
-const MANG ADEX_BASE = process.env.MANG ADEX_BASE_URL || 'https://api.mangadex.org'; // se il tuo env usa nome diverso, correggi
+const MANGADEX_BASE = process.env.MANGADEX_BASE_URL || 'https://api.mangadex.org'; // se il tuo env usa nome diverso, correggi
 const SYNC_SECRET = process.env.SYNC_SECRET;
 const TARGET_LANG = process.env.SYNC_TARGET_LANG || 'it';
 
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
       if (!mdId) continue;
 
       // fetch manga details
-      const mdMetaRes = await fetch(`${MANG ADEX_BASE}/manga/${mdId}`);
+      const mdMetaRes = await fetch(`${MANGADEX_BASE}/manga/${mdId}`);
       const mdMetaJson = await mdMetaRes.json();
       const mdAttr = mdMetaJson.data?.attributes || {};
       const contentRating = (mdAttr.contentRating || '').toLowerCase();
@@ -47,7 +47,7 @@ export default async function handler(req, res) {
       const coverRel = (mdMetaJson.data?.relationships || []).find(r => r.type === 'cover_art');
       if (coverRel && coverRel.id) {
         // get cover image
-        coverUrl = `${process.env.MANG ADEX_CDN || 'https://uploads.mangadex.org'}/covers/${mdId}/${coverRel.attributes?.fileName || ''}`;
+        coverUrl = `${process.env.MANGADEX_CDN || 'https://uploads.mangadex.org'}/covers/${mdId}/${coverRel.attributes?.fileName || ''}`;
       }
 
       const row = {
@@ -68,7 +68,7 @@ export default async function handler(req, res) {
       await supabaseUpsertSingle('manga', row, 'external_id,source');
 
       // chapters sync (existing logic, but ensure translatedLanguage filter)
-      const chRes = await fetch(`${MANG ADEX_BASE}/chapter?manga[]=${mdId}&limit=100&translatedLanguage[]=en`);
+      const chRes = await fetch(`${MANGADEX_BASE}/chapter?manga[]=${mdId}&limit=100&translatedLanguage[]=en`);
       const chJson = await chRes.json();
       const chapters = chJson.data || [];
       for (const c of chapters) {

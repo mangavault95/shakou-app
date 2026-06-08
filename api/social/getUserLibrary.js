@@ -1,6 +1,4 @@
 // api/social/getUserLibrary.js
-import { supabaseFetch } from '../_supabaseService.js'; // se hai helper; altrimenti usa fetch con SUPABASE_URL
-
 export default async function handler(req, res) {
   try {
     const user_id = req.query.user_id || (req.method === 'POST' && req.body?.user_id);
