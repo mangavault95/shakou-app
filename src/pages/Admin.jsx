@@ -72,9 +72,23 @@ export default function Admin() {
 
   if (loading) return <div style={{padding:20}}>Caricamento admin...</div>;
 
+  const usersCount = profiles.length;
+  const adminsCount = profiles.filter(p => p.role === 'admin').length;
+
   return (
     <div style={{ maxWidth:900, margin:'40px auto', padding:20 }}>
       <h2>Admin Console</h2>
+
+      <div style={{ display:'flex', gap:12, marginBottom:20 }}>
+        <div style={{ flex:1, padding:16, border:'1px solid #eee', borderRadius:8 }}>
+          <div style={{ color:'#666' }}>Utenti registrati</div>
+          <div style={{ fontSize:24, fontWeight:700 }}>{usersCount}</div>
+        </div>
+        <div style={{ flex:1, padding:16, border:'1px solid #eee', borderRadius:8 }}>
+          <div style={{ color:'#666' }}>Admin</div>
+          <div style={{ fontSize:24, fontWeight:700 }}>{adminsCount}</div>
+        </div>
+      </div>
 
       <form onSubmit={addAdminByEmail} style={{ marginBottom:16 }}>
         <input

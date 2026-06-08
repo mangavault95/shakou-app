@@ -3,7 +3,7 @@ import React from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 
-import Dashboard from './pages/Dashboard';
+import Feed from './pages/Feed';
 import Profile from './pages/Profile';
 import MangaSearch from './pages/MangaSearch';
 import MangaDetail from './pages/MangaDetail';
@@ -59,7 +59,7 @@ export default function App() {
       <Header user={user} onLogout={handleLogout} setView={setView} />
 
       <main style={{ marginLeft: 220, padding: 20, marginTop: 64 }}>
-        {view === 'dashboard' && <Dashboard user={user} setView={setView} />}
+        {view === 'dashboard' && <Feed user={user} setView={setView} />}
         {view === 'profile' && (
           <Profile
             user={user}

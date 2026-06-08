@@ -3,7 +3,7 @@ import React from 'react';
 
 export default function Sidebar({ setView, currentView }) {
   const items = [
-    { key: 'dashboard', label: 'Dashboard' },
+    { key: 'dashboard', label: 'Home' },
     { key: 'explore', label: 'Esplora' }
   ];
 

@@ -32,7 +32,7 @@ export default function Profile({ user, setView, setSelectedManga }) {
 
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => setView && setView('explore')}>Vai a Esplora</button>
-          <button onClick={() => setView && setView('dashboard')}>Vai a Dashboard</button>
+          <button onClick={() => setView && setView('dashboard')}>Home</button>
         </div>
       </div>
 
