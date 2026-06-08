@@ -116,7 +116,7 @@ export default function MangaDetail({ selectedManga, setView, user }) {
     const source = selectedManga?.source || 'anilist';
     const t = data.title?.romaji || '';
     const tEn = data.title?.english || '';
-    const vc = data.chapters || '';
+    const vc = data.volumes || '';
     const params = new URLSearchParams({ fetch: '1', source, external_id: String(externalId) });
     if (t) params.set('title', t);
     if (tEn) params.set('title_en', tEn);
