@@ -432,13 +432,14 @@ export default async function handler(req, res) {
           }
         }
 
-        const _debug = {
+        // Diagnostica disponibile solo con &debug=1 (lo scraping è fragile)
+        const _debug = (req.query.debug || '').toString() === '1' ? {
           ac_path: acResult.path,
           ac_diag: acResult.dbg,
           ac_editions: Object.fromEntries(Object.entries(acByEd).map(([k, v]) => [k, Object.keys(v).length])),
           gb_editions: Object.fromEntries(Object.entries(gbByEd).map(([k, v]) => [k, Object.keys(v).length])),
           merged_editions: Object.fromEntries(Object.entries(editionsByName).map(([k, v]) => [k, v.length])),
-        };
+        } : undefined;
 
         if (!rows.length) return res.status(200).json({ ok: true, editions_by_name: {}, fetched: false, _debug });
 

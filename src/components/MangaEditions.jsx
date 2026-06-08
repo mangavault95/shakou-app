@@ -4,7 +4,7 @@
 import React from 'react';
 import { getAccessToken } from '../utils/auth';
 
-export default function MangaEditions({ source, externalId, user, onEditionSelect, selectedEdition }) {
+export default function MangaEditions({ source, externalId, user, title, titleEn, volumesCount, onEditionSelect, selectedEdition }) {
   const [editionsByName, setEditionsByName] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [open, setOpen] = React.useState(false);
@@ -14,7 +14,13 @@ export default function MangaEditions({ source, externalId, user, onEditionSelec
     if (!source || !externalId) return;
     setEditionsByName(null);
     setLoading(true);
-    fetch(`/api/editions?source=${encodeURIComponent(source)}&external_id=${encodeURIComponent(externalId)}`)
+    // ?fetch=1 popola la cache da Google Books + AnimeClick (se vuota) e
+    // restituisce le edizioni in un'unica chiamata, evitando race condition.
+    const params = new URLSearchParams({ fetch: '1', source: String(source), external_id: String(externalId) });
+    if (title) params.set('title', title);
+    if (titleEn) params.set('title_en', titleEn);
+    if (volumesCount) params.set('volumes_count', String(volumesCount));
+    fetch(`/api/editions?${params.toString()}`)
       .then(r => r.json())
       .then(j => {
         const data = j.editions_by_name || {};
