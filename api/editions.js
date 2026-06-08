@@ -120,23 +120,36 @@ function parseGbooksItems(items, normTitle) {
 
 async function animeClickSearch(title, dbg) {
   // URL formato AnimeClick: /manga/ID/SLUG/  (es. /manga/9544/20th-century-boys)
-  for (const q of [title, title.split(' ').slice(0, 3).join(' ')]) {
+  // Proviamo diversi formati di ricerca finché uno restituisce link /manga/ID/SLUG
+  const q = encodeURIComponent(title);
+  const candidates = [
+    `/cerca?q=${q}`,
+    `/ricerca/manga?nome=${q}`,
+    `/ricerca/manga?titolo=${q}`,
+    `/ricerca/manga?q=${q}`,
+    `/ricerca/manga?ricerca%5Btesto%5D=${q}`,
+    `/ricerca/manga/${q}`,
+    `/manga/cerca?q=${q}`,
+  ];
+  dbg.search_attempts = [];
+  for (const cand of candidates) {
     try {
-      const url = `${AC_BASE}/ricerca/?q=${encodeURIComponent(q)}&mezzi[]=7`;
+      const url = `${AC_BASE}${cand}`;
       const res = await fetch(url, { headers: FETCH_HEADERS });
       const html = await res.text();
-      dbg.search_status = res.status;
-      dbg.search_len = html.length;
-      if (!dbg.search_snippet) dbg.search_snippet = html.slice(0, 300);
-      if (!res.ok) continue;
-      // Cerca link /manga/ID/SLUG/ — ID numerico
-      const m = html.match(/href="(https?:\/\/www\.animeclick\.it\/manga\/\d+\/[^"\/]+\/?)"/i)
-        || html.match(/href="(\/manga\/\d+\/[^"\/]+\/?)"/i);
-      if (m) {
-        const path = m[1].startsWith('http') ? new URL(m[1]).pathname : m[1];
-        return path.replace(/\/$/, ''); // es. "/manga/9544/20th-century-boys"
+      const links = [...html.matchAll(/\/manga\/\d+\/[a-z0-9-]+/gi)].map(x => x[0]);
+      const pageTitle = (html.match(/<title>([^<]*)<\/title>/i) || [])[1] || '';
+      dbg.search_attempts.push({
+        cand, status: res.status, len: html.length,
+        title: pageTitle.trim().slice(0, 60),
+        manga_links: [...new Set(links)].slice(0, 3),
+      });
+      if (res.ok && links.length) {
+        return links[0].replace(/\/$/, '');
       }
-    } catch (e) { dbg.search_error = String(e.message || e); }
+    } catch (e) {
+      dbg.search_attempts.push({ cand, error: String(e.message || e) });
+    }
   }
   return null;
 }
