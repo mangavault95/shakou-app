@@ -392,9 +392,9 @@ export default async function handler(req, res) {
         const titleEn = (req.query.title_en || '').toString().trim();
         const volCount = req.query.volumes_count;
         const force = (req.query.force || '').toString() === '1';
-        if (!source || !external_id || (!title && !titleEn)) return res.status(400).json({ error: 'missing params' });
+        if (!source || !external_id) return res.status(400).json({ error: 'missing source/external_id' });
 
-        // Cache hit (bypassato se force=1)
+        // Cache hit (bypassato se force=1) — serve solo source+external_id
         if (!force) {
           const { data: existing } = await admin.from('manga_editions').select('id')
             .eq('source', source).eq('external_id', external_id).limit(1);
@@ -408,6 +408,9 @@ export default async function handler(req, res) {
           await admin.from('manga_editions').delete()
             .eq('source', source).eq('external_id', external_id);
         }
+
+        // Cache mancante (o forzato): per lo scraping serve almeno un titolo.
+        if (!title && !titleEn) return res.status(200).json({ ok: true, editions_by_name: {}, fetched: false });
 
         const searchTitle = title || titleEn;
         const normTitle = searchTitle.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();

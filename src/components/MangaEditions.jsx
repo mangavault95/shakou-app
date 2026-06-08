@@ -12,6 +12,9 @@ export default function MangaEditions({ source, externalId, user, title, titleEn
 
   React.useEffect(() => {
     if (!source || !externalId) return;
+    // Aspetta che il titolo arrivi da AniList: serve al backend per lo
+    // scraping al primo caricamento (su cache mancante).
+    if (!title && !titleEn) return;
     setEditionsByName(null);
     setLoading(true);
     // ?fetch=1 popola la cache da Google Books + AnimeClick (se vuota) e
@@ -37,7 +40,7 @@ export default function MangaEditions({ source, externalId, user, title, titleEn
       .catch(() => {})
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, externalId]);
+  }, [source, externalId, title, titleEn]);
 
   if (loading) return <div style={{ fontSize: 13, color: '#888', marginTop: 12 }}>Ricerca edizioni italiane…</div>;
   if (!editionsByName) return null;
