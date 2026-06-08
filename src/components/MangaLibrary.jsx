@@ -194,6 +194,11 @@ export default function MangaLibrary({ user, setView, setSelectedManga, onLibrar
                   <div style={{ fontSize: 12, color: '#666' }}>
                     {item.volumes_owned > 0 ? `${item.volumes_owned} vol. posseduti` : 'Nessun volume'}
                     {item.volumes_read > 0 ? ` · ${item.volumes_read} letti` : ''}
+                    {item.edition_name && item.edition_name !== 'Standard' && (
+                      <span style={{ marginLeft: 4, padding: '1px 6px', borderRadius: 999, background: '#6366f111', color: '#6366f1', fontWeight: 600 }}>
+                        {item.edition_name}
+                      </span>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
                     <button onClick={() => openDetail(item)} style={{ flex: 1, padding: '5px 0', fontSize: 12 }}>Dettagli</button>

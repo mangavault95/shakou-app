@@ -1,34 +1,33 @@
 // api/editions.js
 // Repo centrale: edizioni italiane dei manga + statistiche libreria utente.
 //
-// GET ?source=&external_id=              -> volumi/edizioni per un manga
+// GET ?source=&external_id=              -> edizioni raggruppate per nome
 // GET ?user_stats=1                      -> statistiche aggregate libreria (auth)
 // GET ?fetch=1&source=&external_id=&title=&title_en=&volumes_count=N
 //                                        -> auto-popola edizioni da Google Books + AnimeClick
-// POST { source, external_id, volumes:[...] } -> upsert edizioni (admin only)
+// POST { source, external_id, editions:[{edition_name, volumes:[{volume_number,publisher,price,...}]}] }
+//                                        -> upsert edizioni (admin)
 import { admin, getUserFromRequest, parseBody } from './_auth.js';
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '';
 const GBOOKS = 'https://www.googleapis.com/books/v1/volumes';
 const AC_BASE = 'https://www.animeclic.it';
 
-// Prezzi medi italiani per editore (fallback quando né Google Books né AnimeClick danno il prezzo)
+// Keywords che indicano un'edizione speciale — usati per raggruppare i risultati
+const EDITION_KEYWORDS = [
+  'perfect edition', 'deluxe edition', 'deluxe', 'kanzenban',
+  'complete edition', 'omnibus', 'big', 'wide edition', 'gold edition',
+  'master edition', 'nuova edizione', 'edizione deluxe', 'edizione perfect',
+  'edizione completa', 'ultimate', 'collector'
+];
+
 const PUBLISHER_DEFAULT_PRICE = {
-  'star comics':  5.20,
-  'panini':       4.90,
-  'panini comics':4.90,
-  'j-pop':        7.90,
-  'jpop':         7.90,
-  'planet manga': 5.20,
-  'flashbook':    6.50,
-  'rw goen':      5.90,
-  'goen':         5.90,
-  'magic press':  5.20,
-  'dynit':        5.90,
-  'edizioni bd':  6.90,
-  'bd':           6.90,
+  'star comics': 5.20, 'panini': 4.90, 'panini comics': 4.90,
+  'j-pop': 7.90, 'jpop': 7.90, 'planet manga': 5.20,
+  'flashbook': 6.50, 'rw goen': 5.90, 'goen': 5.90,
+  'magic press': 5.20, 'dynit': 5.90, 'edizioni bd': 6.90, 'bd': 6.90,
 };
-const DEFAULT_MANGA_PRICE = 5.50; // media generica
+const DEFAULT_MANGA_PRICE = 5.50;
 
 async function isAdmin(user) {
   if (!user) return false;
@@ -37,182 +36,173 @@ async function isAdmin(user) {
   return data?.role === 'admin';
 }
 
+// Estrae il nome dell'edizione da un titolo Google Books
+function detectEditionName(fullTitle) {
+  const lower = fullTitle.toLowerCase();
+  for (const kw of EDITION_KEYWORDS) {
+    if (lower.includes(kw)) {
+      // Capitalizza correttamente
+      return kw.replace(/\b\w/g, c => c.toUpperCase());
+    }
+  }
+  return 'Standard';
+}
+
+function extractVolumeNumber(s) {
+  const m = (s || '').match(/(?:vol(?:ume)?\.?\s*|n[°.]?\s*|#\s*)(\d+)/i)
+    || (s || '').match(/\b(\d+)\s*$/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
 // ---------- Google Books ----------
 async function fetchGoogleBooks(title) {
   const q = encodeURIComponent(`"${title}" manga`);
-  const url = `${GBOOKS}?q=${q}&langRestrict=it&maxResults=20&printType=books`;
   try {
-    const res = await fetch(url);
+    const res = await fetch(`${GBOOKS}?q=${q}&langRestrict=it&maxResults=40&printType=books`);
     const json = await res.json();
     return json?.items || [];
   } catch { return []; }
 }
 
-function extractVolumeNumber(s) {
-  // "One Piece, Vol. 3" / "One Piece 3" / "volume 3" / "vol. 3" / "n. 3" / "#3"
-  const m = (s || '').match(/(?:vol(?:ume)?\.?\s*|n[°.]?\s*|#\s*)(\d+)/i);
-  return m ? parseInt(m[1], 10) : null;
-}
-
-function parseGbooksItems(items, normalizedTitle) {
-  const results = {};
+function parseGbooksItems(items, normTitle) {
+  // Raggruppa per edition_name
+  const byEdition = {};
   for (const item of items) {
     const vi = item.volumeInfo || {};
-    const fullTitle = (vi.title || '') + ' ' + (vi.subtitle || '');
+    const fullTitle = [(vi.title || ''), (vi.subtitle || '')].join(' ').trim();
     const norm = fullTitle.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
-    // accetta solo se il titolo normalizzato contiene il titolo cercato
-    if (!norm.includes(normalizedTitle)) continue;
+    if (!norm.includes(normTitle)) continue;
 
     const volNum = extractVolumeNumber(fullTitle) || extractVolumeNumber(vi.subtitle || '');
-    if (!volNum) continue;
-    if (results[volNum]) continue; // già trovato
+    if (!volNum || volNum > 500) continue;
+
+    const edName = detectEditionName(fullTitle);
+    if (!byEdition[edName]) byEdition[edName] = {};
+    if (byEdition[edName][volNum]) continue;
 
     const publisher = (vi.publisher || '').trim() || null;
-    const saleInfo = item.saleInfo || {};
-    let price = null;
-    if (saleInfo.listPrice?.amount) price = saleInfo.listPrice.amount;
-    else if (saleInfo.retailPrice?.amount) price = saleInfo.retailPrice.amount;
-
-    // scarta prezzi palesemente sbagliati (< 1 € o > 50 €)
+    const si = item.saleInfo || {};
+    let price = si.listPrice?.amount || si.retailPrice?.amount || null;
     if (price !== null && (price < 1 || price > 50)) price = null;
 
-    results[volNum] = { volume_number: volNum, publisher, price };
+    byEdition[edName][volNum] = { volume_number: volNum, publisher, price };
   }
-  return Object.values(results);
+  return byEdition;
 }
 
 // ---------- AnimeClick ----------
-// Cerca il manga su AnimeClick e tenta di estrarre editore + prezzi dei volumi.
 async function fetchAnimeClick(title) {
   try {
     const q = encodeURIComponent(title);
-    // 1) Pagina di ricerca
-    const searchUrl = `${AC_BASE}/archivio/manga/?q=${q}`;
-    const sRes = await fetch(searchUrl, {
+    const sRes = await fetch(`${AC_BASE}/archivio/manga/?q=${q}`, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Shakou/1.0)' }
     });
-    if (!sRes.ok) return [];
+    if (!sRes.ok) return {};
     const sHtml = await sRes.text();
 
-    // Trova il primo link manga nell'archivio
-    // Pattern tipico: href="/manga/nome-manga/" dentro una lista risultati
-    const linkMatch = sHtml.match(/href="(\/manga\/[^"]+\/)"[^>]*>[^<]*<[^>]+>[^<]*<\/[^>]+>\s*[^<]*<[^>]+class="[^"]*titolo[^"]*"[^>]*>\s*([^<]+)/i)
-      || sHtml.match(/href="(\/manga\/[a-z0-9\-]+\/)"/i);
-    if (!linkMatch) return [];
+    const linkMatch = sHtml.match(/href="(\/manga\/[a-z0-9\-]+\/)"/i);
+    if (!linkMatch) return {};
 
-    const mangaPath = linkMatch[1];
-    // 2) Pagina del manga: cerca link alla sezione volumi/edizioni
-    const mRes = await fetch(`${AC_BASE}${mangaPath}volumi/`, {
+    const mRes = await fetch(`${AC_BASE}${linkMatch[1]}volumi/`, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Shakou/1.0)' }
     });
-    if (!mRes.ok) return [];
+    if (!mRes.ok) return {};
     const mHtml = await mRes.text();
-
-    return parseAnimeClickVolumes(mHtml);
-  } catch { return []; }
+    return parseAcVolumes(mHtml);
+  } catch { return {}; }
 }
 
-function parseAnimeClickVolumes(html) {
-  const results = [];
-  // Cerca pattern "Vol. N" o "Volume N" e il prezzo nelle vicinanze
-  // AnimeClick mostra prezzi come "€ 5,20" o "5,20 €"
-  const priceRe = /(?:€\s*([\d]+[,.][\d]{2})|([\d]+[,.][\d]{2})\s*€)/g;
-  const volRe = /[Vv]ol(?:ume)?\.?\s*(\d+)/g;
+function parseAcVolumes(html) {
+  const byEdition = {};
+  // Divide in blocchi per tipo/serie di edizione se presenti
+  // Cerca intestazioni di edizione (h2/h3 con nome edizione)
+  const edSections = html.split(/(?=<h[23][^>]*>[^<]*<\/h[23]>)/i);
 
-  // Estrai sezioni di testo per ogni volume cercando prossimità tra numero volume e prezzo
-  // Dividi l'HTML in blocchi per ogni voce di volume
-  const blocks = html.split(/(?=<[^>]*class="[^"]*(?:volume|vol|book)[^"]*")/i);
-  for (const block of blocks) {
-    const vm = block.match(/[Vv]ol(?:ume)?\.?\s*(\d+)/);
-    if (!vm) continue;
-    const volNum = parseInt(vm[1], 10);
+  for (const section of edSections) {
+    // Determina nome edizione dalla intestazione
+    const hMatch = section.match(/<h[23][^>]*>([^<]+)<\/h[23]>/i);
+    const sectionTitle = hMatch ? hMatch[1].trim() : '';
+    const edName = detectEditionName(sectionTitle) !== 'Standard' ? detectEditionName(sectionTitle) : 'Standard';
+    if (!byEdition[edName]) byEdition[edName] = {};
 
-    // Cerca editore
-    let publisher = null;
-    const pubM = block.match(/class="[^"]*editore[^"]*"[^>]*>([^<]+)</i)
-      || block.match(/[Ee]ditore[^:]*:\s*<[^>]*>([^<]+)/);
-    if (pubM) publisher = pubM[1].trim();
+    // Blocchi volume
+    const blocks = section.split(/(?=<[^>]*class="[^"]*(?:volume|vol|book)[^"]*")/i);
+    for (const block of blocks) {
+      const vm = block.match(/[Vv]ol(?:ume)?\.?\s*(\d+)/);
+      if (!vm) continue;
+      const volNum = parseInt(vm[1], 10);
+      if (byEdition[edName][volNum]) continue;
 
-    // Cerca prezzo nel blocco
-    let price = null;
-    const pm = block.match(/(?:€\s*([\d]+[,.][\d]{2})|([\d]+[,.][\d]{2})\s*€)/);
-    if (pm) {
-      const raw = (pm[1] || pm[2]).replace(',', '.');
-      const n = parseFloat(raw);
-      if (n >= 1 && n <= 50) price = n;
-    }
+      let publisher = null;
+      const pubM = block.match(/class="[^"]*editore[^"]*"[^>]*>([^<]+)</i);
+      if (pubM) publisher = pubM[1].trim();
 
-    if (!results.find(r => r.volume_number === volNum)) {
-      results.push({ volume_number: volNum, publisher, price });
-    }
-  }
-
-  // Se i blocchi non hanno funzionato, prova estrazione globale prezzi ordinati
-  if (results.length === 0) {
-    const allVols = [...html.matchAll(/[Vv]ol(?:ume)?\.?\s*(\d+)/g)].map(m => parseInt(m[1]));
-    const allPrices = [...html.matchAll(/(?:€\s*([\d,]+)|([\d,]+)\s*€)/g)]
-      .map(m => parseFloat((m[1] || m[2]).replace(',', '.')))
-      .filter(p => p >= 1 && p <= 50);
-
-    for (let i = 0; i < Math.min(allVols.length, allPrices.length); i++) {
-      const vn = allVols[i];
-      if (!results.find(r => r.volume_number === vn)) {
-        results.push({ volume_number: vn, publisher: null, price: allPrices[i] });
+      let price = null;
+      const pm = block.match(/(?:€\s*([\d]+[,.][\d]{2})|([\d]+[,.][\d]{2})\s*€)/);
+      if (pm) {
+        const n = parseFloat((pm[1] || pm[2]).replace(',', '.'));
+        if (n >= 1 && n <= 50) price = n;
       }
+      byEdition[edName][volNum] = { volume_number: volNum, publisher, price };
     }
   }
-
-  return results;
+  return byEdition;
 }
 
-// ---------- Merge & store ----------
-function mergeEditions(gbData, acData, volCount) {
-  const map = {};
+// ---------- Merge ----------
+function mergeEditions(gbByEd, acByEd, volCount) {
+  const allEdNames = new Set([...Object.keys(gbByEd), ...Object.keys(acByEd)]);
+  if (!allEdNames.size) allEdNames.add('Standard');
 
-  // Priorità: Google Books per publisher e prezzo; AnimeClick come fallback prezzo
-  for (const e of gbData) map[e.volume_number] = { ...e };
-  for (const e of acData) {
-    if (!map[e.volume_number]) map[e.volume_number] = { volume_number: e.volume_number, publisher: null, price: null };
-    if (!map[e.volume_number].price && e.price) map[e.volume_number].price = e.price;
-    if (!map[e.volume_number].publisher && e.publisher) map[e.volume_number].publisher = e.publisher;
-  }
-
-  // Stima del publisher prevalente per riempire quelli mancanti
-  const publishers = Object.values(map).map(e => e.publisher).filter(Boolean);
-  const topPub = publishers.sort((a, b) =>
-    publishers.filter(x => x === b).length - publishers.filter(x => x === a).length
-  )[0] || null;
-
-  // Riempi i volumi mancanti (se volCount noto) con il publisher prevalente e prezzo default
-  const defaultPrice = topPub
-    ? (PUBLISHER_DEFAULT_PRICE[topPub.toLowerCase()] || DEFAULT_MANGA_PRICE)
-    : DEFAULT_MANGA_PRICE;
-
-  const n = Number(volCount);
-  if (Number.isInteger(n) && n > 0) {
-    for (let i = 1; i <= n; i++) {
-      if (!map[i]) map[i] = { volume_number: i, publisher: topPub, price: defaultPrice };
+  const result = {};
+  for (const edName of allEdNames) {
+    const gb = gbByEd[edName] || {};
+    const ac = acByEd[edName] || {};
+    const map = { ...gb };
+    for (const [vn, e] of Object.entries(ac)) {
+      if (!map[vn]) map[vn] = { ...e };
       else {
-        if (!map[i].publisher) map[i].publisher = topPub;
-        if (!map[i].price) map[i].price = defaultPrice;
+        if (!map[vn].price && e.price) map[vn].price = e.price;
+        if (!map[vn].publisher && e.publisher) map[vn].publisher = e.publisher;
       }
     }
-  } else {
-    // Senza volCount: riempi solo i volumi trovati
+
+    const publishers = Object.values(map).map(e => e.publisher).filter(Boolean);
+    const topPub = publishers.sort((a, b) =>
+      publishers.filter(x => x === b).length - publishers.filter(x => x === a).length
+    )[0] || null;
+    const defPrice = topPub
+      ? (PUBLISHER_DEFAULT_PRICE[topPub.toLowerCase()] || DEFAULT_MANGA_PRICE)
+      : DEFAULT_MANGA_PRICE;
+
+    // Completa i volumi mancanti solo per l'edizione Standard (quella principale)
+    if (edName === 'Standard') {
+      const n = Number(volCount);
+      if (Number.isInteger(n) && n > 0) {
+        for (let i = 1; i <= n; i++) {
+          if (!map[i]) map[i] = { volume_number: i, publisher: topPub, price: defPrice };
+          else {
+            if (!map[i].publisher) map[i].publisher = topPub;
+            if (!map[i].price) map[i].price = defPrice;
+          }
+        }
+      }
+    }
+    // Per edizioni speciali: riempi solo i volumi già trovati
     for (const e of Object.values(map)) {
       if (!e.publisher) e.publisher = topPub;
-      if (!e.price) e.price = defaultPrice;
+      if (!e.price) e.price = defPrice;
     }
-  }
 
-  return Object.values(map).sort((a, b) => a.volume_number - b.volume_number);
+    result[edName] = Object.values(map).sort((a, b) => a.volume_number - b.volume_number);
+  }
+  return result;
 }
 
 // ---------- Handler ----------
 export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
-      // Statistiche aggregate libreria utente
       if ((req.query.user_stats || '').toString() === '1') {
         const user = await getUserFromRequest(req);
         if (!user) return res.status(401).json({ error: 'unauthorized' });
@@ -224,7 +214,6 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, stats: computeStats(items || []) });
       }
 
-      // Auto-fetch edizioni da Google Books + AnimeClick
       if ((req.query.fetch || '').toString() === '1') {
         const source = (req.query.source || '').toString();
         const external_id = (req.query.external_id || '').toString();
@@ -235,63 +224,58 @@ export default async function handler(req, res) {
           return res.status(400).json({ error: 'missing params' });
         }
 
-        // Se le edizioni esistono già non le ri-fetchare
+        // Cache hit: ritorna direttamente
         const { data: existing } = await admin
-          .from('manga_editions')
-          .select('id')
-          .eq('source', source).eq('external_id', external_id)
-          .limit(1);
+          .from('manga_editions').select('id').eq('source', source).eq('external_id', external_id).limit(1);
         if (existing && existing.length) {
           const { data: all } = await admin.from('manga_editions')
-            .select('volume_number, publisher, title, price, release_date, isbn')
-            .eq('source', source).eq('external_id', external_id)
-            .order('volume_number');
-          return res.status(200).json({ ok: true, cached: true, editions: all || [] });
+            .select('edition_name, volume_number, publisher, title, price, release_date, isbn')
+            .eq('source', source).eq('external_id', external_id).order('volume_number');
+          return res.status(200).json({ ok: true, cached: true, editions_by_name: groupByEdition(all || []) });
         }
 
-        // Fetch parallelo
         const searchTitle = title || titleEn;
         const normTitle = searchTitle.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
-        const [gbItems, acItems] = await Promise.all([
+        const [gbItems, acByEd] = await Promise.all([
           fetchGoogleBooks(searchTitle),
           fetchAnimeClick(searchTitle)
         ]);
+        const gbByEd = parseGbooksItems(gbItems, normTitle);
+        const editionsByName = mergeEditions(gbByEd, acByEd, volCount);
 
-        const gbData = parseGbooksItems(gbItems, normTitle);
-        const editions = mergeEditions(gbData, acItems, volCount);
-
-        if (!editions.length) {
-          return res.status(200).json({ ok: true, editions: [], fetched: false });
+        const rows = [];
+        for (const [edName, vols] of Object.entries(editionsByName)) {
+          for (const v of vols) {
+            rows.push({
+              source, external_id,
+              edition_name: edName,
+              volume_number: v.volume_number,
+              publisher: v.publisher || null,
+              price: v.price || null,
+              updated_at: new Date().toISOString()
+            });
+          }
         }
 
-        // Salva su DB
-        const rows = editions.map(e => ({
-          source, external_id,
-          volume_number: e.volume_number,
-          publisher: e.publisher || null,
-          price: e.price || null,
-          updated_at: new Date().toISOString()
-        }));
-        const { data: saved, error: saveErr } = await admin
-          .from('manga_editions').insert(rows).select();
-        if (saveErr) {
-          console.error('editions insert error', saveErr);
-          return res.status(200).json({ ok: true, editions, fetched: true, saved: false });
-        }
-        return res.status(200).json({ ok: true, editions: saved || editions, fetched: true, saved: true });
+        if (!rows.length) return res.status(200).json({ ok: true, editions_by_name: {}, fetched: false });
+
+        const { error: saveErr } = await admin.from('manga_editions').insert(rows);
+        if (saveErr) console.error('editions insert error', saveErr);
+
+        return res.status(200).json({ ok: true, editions_by_name: editionsByName, fetched: true });
       }
 
-      // Edizioni per un singolo manga (già salvate)
+      // GET edizioni salvate
       const source = (req.query.source || '').toString();
       const external_id = (req.query.external_id || '').toString();
       if (!source || !external_id) return res.status(400).json({ error: 'missing source/external_id' });
       const { data, error } = await admin
         .from('manga_editions')
-        .select('volume_number, publisher, title, price, release_date, isbn')
+        .select('edition_name, volume_number, publisher, title, price, release_date, isbn')
         .eq('source', source).eq('external_id', external_id)
-        .order('volume_number', { ascending: true });
+        .order('edition_name').order('volume_number');
       if (error) throw error;
-      return res.status(200).json({ ok: true, editions: data || [] });
+      return res.status(200).json({ ok: true, editions_by_name: groupByEdition(data || []) });
     }
 
     if (req.method === 'POST') {
@@ -302,25 +286,34 @@ export default async function handler(req, res) {
       const body = parseBody(req);
       const source = (body.source || '').toString();
       const external_id = (body.external_id || '').toString();
-      const volumes = Array.isArray(body.volumes) ? body.volumes : [];
-      if (!source || !external_id || !volumes.length) return res.status(400).json({ error: 'missing params' });
+      const editions = Array.isArray(body.editions) ? body.editions : [];
+      if (!source || !external_id || !editions.length) return res.status(400).json({ error: 'missing params' });
 
-      const rows = volumes
-        .filter(v => v && Number.isInteger(Number(v.volume_number)))
-        .map(v => ({
-          source, external_id,
-          volume_number: Number(v.volume_number),
-          publisher: (v.publisher || '').trim() || null,
-          title: (v.title || '').trim() || null,
-          price: v.price != null ? Number(v.price) : null,
-          release_date: v.release_date || null,
-          isbn: (v.isbn || '').trim() || null,
-          updated_at: new Date().toISOString()
-        }));
+      const rows = [];
+      for (const ed of editions) {
+        const edName = (ed.edition_name || 'Standard').toString().trim();
+        for (const v of (Array.isArray(ed.volumes) ? ed.volumes : [])) {
+          if (!Number.isInteger(Number(v.volume_number))) continue;
+          rows.push({
+            source, external_id, edition_name: edName,
+            volume_number: Number(v.volume_number),
+            publisher: (v.publisher || '').trim() || null,
+            title: (v.title || '').trim() || null,
+            price: v.price != null ? Number(v.price) : null,
+            release_date: v.release_date || null,
+            isbn: (v.isbn || '').trim() || null,
+            updated_at: new Date().toISOString()
+          });
+        }
+      }
 
-      const volNums = rows.map(r => r.volume_number);
-      await admin.from('manga_editions')
-        .delete().eq('source', source).eq('external_id', external_id).in('volume_number', volNums);
+      const edNames = [...new Set(rows.map(r => r.edition_name))];
+      const volNums = [...new Set(rows.map(r => r.volume_number))];
+      for (const en of edNames) {
+        await admin.from('manga_editions')
+          .delete().eq('source', source).eq('external_id', external_id)
+          .eq('edition_name', en).in('volume_number', volNums);
+      }
       const { data, error } = await admin.from('manga_editions').insert(rows).select();
       if (error) throw error;
       return res.status(200).json({ ok: true, upserted: data?.length || 0 });
@@ -333,23 +326,26 @@ export default async function handler(req, res) {
   }
 }
 
+function groupByEdition(rows) {
+  const out = {};
+  for (const r of rows) {
+    const n = r.edition_name || 'Standard';
+    if (!out[n]) out[n] = [];
+    out[n].push(r);
+  }
+  return out;
+}
+
 function computeStats(items) {
   const seriesCount = items.length;
   const totalOwned = items.reduce((s, i) => s + (Number(i.volumes_owned) || 0), 0);
   const totalRead = items.reduce((s, i) => s + (Number(i.volumes_read) || 0), 0);
   const collectionValue = items.reduce((s, i) => s + (Number(i.owned_value) || 0), 0);
-
   const statusBreakdown = {};
-  for (const i of items) {
-    const st = i.status || 'sconosciuto';
-    statusBreakdown[st] = (statusBreakdown[st] || 0) + 1;
-  }
+  for (const i of items) { const st = i.status || 'sconosciuto'; statusBreakdown[st] = (statusBreakdown[st] || 0) + 1; }
   const publisherBreakdown = {};
-  for (const i of items) {
-    if (i.publisher) publisherBreakdown[i.publisher] = (publisherBreakdown[i.publisher] || 0) + 1;
-  }
+  for (const i of items) { if (i.publisher) publisherBreakdown[i.publisher] = (publisherBreakdown[i.publisher] || 0) + 1; }
   const topPublisher = Object.entries(publisherBreakdown).sort((a, b) => b[1] - a[1])[0] || null;
-
   return {
     seriesCount, totalOwned, totalRead,
     collectionValue: Math.round(collectionValue * 100) / 100,
