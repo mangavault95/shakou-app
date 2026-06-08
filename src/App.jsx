@@ -8,6 +8,8 @@ import Profile from './pages/Profile';
 import MangaSearch from './pages/MangaSearch';
 import MangaDetail from './pages/MangaDetail';
 import Login from './pages/Login';
+import Admin from './pages/Admin';
+import Settings from './pages/Settings';
 
 import { supabase } from './supabase';
 
@@ -79,8 +81,12 @@ export default function App() {
           />
         )}
         {view === 'login' && <Login setView={setView} setUser={setUser} supabase={supabase} />}
-        {view === 'admin' && <div>Admin (in costruzione)</div>}
-        {view === 'settings' && <div>Impostazioni (in costruzione)</div>}
+        {view === 'admin' && (
+          user?.user_metadata?.role === 'admin'
+            ? <Admin />
+            : <div style={{ padding: 20 }}>Accesso riservato agli amministratori.</div>
+        )}
+        {view === 'settings' && <Settings user={user} />}
       </main>
     </div>
   );
