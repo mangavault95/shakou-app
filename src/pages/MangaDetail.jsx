@@ -216,6 +216,7 @@ export default function MangaDetail({ selectedManga, setView, user }) {
           user={user}
           title={m.title?.romaji || title}
           titleEn={m.title?.english || ''}
+          chaptersCount={m.chapters}
         />
       )}
     </div>

@@ -12,7 +12,7 @@ const tabStyle = (active) => ({
   cursor: 'pointer'
 });
 
-export default function MangaSocial({ source = 'anilist', externalId, user, title, titleEn }) {
+export default function MangaSocial({ source = 'anilist', externalId, user, title, titleEn, chaptersCount }) {
   const [scope, setScope] = React.useState('manga'); // 'manga' | 'chapter'
   const [chapterInput, setChapterInput] = React.useState('');
   const [activeChapter, setActiveChapter] = React.useState(null);
@@ -68,7 +68,19 @@ export default function MangaSocial({ source = 'anilist', externalId, user, titl
 
   // Carica la lista capitoli reale da MangaDex la prima volta che si apre la tab Capitolo
   React.useEffect(() => {
-    if (scope !== 'chapter' || chaptersLoaded || (!title && !titleEn)) return;
+    if (scope !== 'chapter' || chaptersLoaded) return;
+
+    // 1) Fonte primaria: il conteggio capitoli di AniList (stessa fonte del manga,
+    //    nessun match da fare -> affidabile). Genera la lista 1..N localmente.
+    const n = Number(chaptersCount);
+    if (Number.isInteger(n) && n > 0) {
+      setChapterList(Array.from({ length: n }, (_, i) => ({ number: i + 1 })));
+      setChaptersLoaded(true);
+      return;
+    }
+
+    // 2) Fallback: MangaDex (per manga in corso senza conteggio AniList, es. Berserk).
+    if (!title && !titleEn) { setChaptersLoaded(true); return; }
     let active = true;
     setChaptersLoading(true);
     const params = new URLSearchParams({ kind: 'chapters', external_id: String(externalId || '') });
@@ -81,7 +93,7 @@ export default function MangaSocial({ source = 'anilist', externalId, user, titl
       .finally(() => { if (active) setChaptersLoading(false); });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope, chaptersLoaded, title, titleEn, externalId]);
+  }, [scope, chaptersLoaded, chaptersCount, title, titleEn, externalId]);
 
   async function postAction(payload) {
     const token = await getAccessToken();
