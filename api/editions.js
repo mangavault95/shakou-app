@@ -11,7 +11,17 @@ import { admin, getUserFromRequest, parseBody } from './_auth.js';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '';
 const GBOOKS = 'https://www.googleapis.com/books/v1/volumes';
 const AC_BASE = 'https://www.animeclick.it';
-const FETCH_HEADERS = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36' };
+const FETCH_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+  'Accept-Language': 'it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'Referer': 'https://www.animeclick.it/',
+  'Cache-Control': 'no-cache',
+  'Sec-Fetch-Dest': 'document',
+  'Sec-Fetch-Mode': 'navigate',
+  'Sec-Fetch-Site': 'same-origin',
+};
 
 const PUBLISHER_DEFAULT_PRICE = {
   'star comics': 5.20, 'panini': 4.90, 'panini comics': 4.90,
@@ -128,14 +138,14 @@ async function animeClickSearch(title) {
 }
 
 async function animeClickVolumes(mangaPath) {
-  // Pagina volumi: /manga/ID/SLUG/volumi/?per_page=500
   const url = `${AC_BASE}${mangaPath}/volumi/?per_page=500`;
   try {
-    const res = await fetch(url, { headers: FETCH_HEADERS });
+    const res = await fetch(url, { headers: { ...FETCH_HEADERS, Referer: `${AC_BASE}${mangaPath}/` } });
+    console.log('[AC] volumes status:', res.status, url);
     if (!res.ok) return {};
     const html = await res.text();
     return parseAcHtml(html);
-  } catch { return {}; }
+  } catch (e) { console.log('[AC] volumes error:', e.message); return {}; }
 }
 
 function parseAcHtml(html) {
