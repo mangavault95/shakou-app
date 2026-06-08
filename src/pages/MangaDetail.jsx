@@ -108,7 +108,22 @@ export default function MangaDetail({ selectedManga, setView, user }) {
     return () => { active = false; };
   }, [externalId]);
 
-  // 2) Traduci la trama in italiano (fallback: testo originale ripulito)
+  // 2) Pre-popola edizioni italiane in background (fire & forget, non blocca la UI)
+  React.useEffect(() => {
+    if (!externalId || !data) return;
+    const source = selectedManga?.source || 'anilist';
+    const t = data.title?.romaji || '';
+    const tEn = data.title?.english || '';
+    const vc = data.chapters || '';
+    const params = new URLSearchParams({ fetch: '1', source, external_id: String(externalId) });
+    if (t) params.set('title', t);
+    if (tEn) params.set('title_en', tEn);
+    if (vc) params.set('volumes_count', String(vc));
+    fetch(`/api/editions?${params.toString()}`).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalId, data]);
+
+  // 3) Traduci la trama in italiano (fallback: testo originale ripulito)
   const rawSynopsis = cleanDescription(data?.description || selectedManga?.synopsis);
   React.useEffect(() => {
     if (!rawSynopsis) { setSynopsisIt(''); return; }
