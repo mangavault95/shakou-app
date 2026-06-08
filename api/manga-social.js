@@ -32,9 +32,9 @@ async function findMangaDexId(anilistId, titles) {
   return null;
 }
 
-// Ricava la lista capitoli (interi) dal MangaDex aggregate. Per ogni capitolo
-// usa il volume MINIMO in cui appare (gli upload duplicati possono assegnare
-// lo stesso capitolo a volumi diversi).
+// Ricava la lista dei numeri di capitolo (interi) dal MangaDex aggregate.
+// NB: il campo "volume" di MangaDex e' inaffidabile (varia da entry a entry,
+// a volte palesemente sbagliato) quindi non lo usiamo.
 async function fetchMangaDexChapters(anilistId, titles) {
   const mdId = await findMangaDexId(anilistId, titles);
   if (!mdId) return { mangadex_id: null, chapters: [], matched: false };
@@ -44,30 +44,19 @@ async function fetchMangaDexChapters(anilistId, titles) {
   const volumes = aJson?.volumes;
   const volEntries = volumes && !Array.isArray(volumes) ? Object.values(volumes) : [];
 
-  const minVolByChapter = new Map(); // numero capitolo -> volume minimo (o null)
+  const seen = new Set();
   for (const vol of volEntries) {
-    const volNum = vol?.volume && vol.volume !== 'none' ? Number(vol.volume) : null;
     const chapters = vol?.chapters;
     const chEntries = chapters && !Array.isArray(chapters) ? Object.values(chapters) : [];
     for (const ch of chEntries) {
-      const raw = ch?.chapter;
-      if (raw == null || raw === 'none') continue;
-      const n = Number(raw);
+      const n = Number(ch?.chapter);
       if (!Number.isInteger(n)) continue; // scope_number e' integer: solo capitoli interi
-      const cur = minVolByChapter.get(n);
-      if (cur === undefined) {
-        minVolByChapter.set(n, volNum);
-      } else if (volNum != null && (cur == null || volNum < cur)) {
-        minVolByChapter.set(n, volNum);
-      }
+      seen.add(n);
     }
   }
 
-  const list = [...minVolByChapter.entries()]
-    .map(([number, volume]) => ({ number, volume }))
-    .sort((a, b) => a.number - b.number);
-
-  return { mangadex_id: mdId, chapters: list, matched: true };
+  const chapters = [...seen].sort((a, b) => a - b).map(number => ({ number }));
+  return { mangadex_id: mdId, chapters, matched: true };
 }
 
 function readScope(q) {

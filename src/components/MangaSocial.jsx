@@ -146,7 +146,7 @@ export default function MangaSocial({ source = 'anilist', externalId, user, titl
               <option value="">Scegli un capitolo… ({chapterList.length})</option>
               {chapterList.map(c => (
                 <option key={c.number} value={c.number}>
-                  Capitolo {c.number}{c.volume ? ` (Vol. ${c.volume})` : ''}
+                  Capitolo {c.number}
                 </option>
               ))}
             </select>
