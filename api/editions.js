@@ -144,6 +144,7 @@ function parseAcHtml(html) {
   // 1) Mappa id -> nome edizione dal <select>
   const editionMap = {}; // "1" -> "20th Century Boys", "2" -> "Ultimate Deluxe Edition" ...
   const selMatch = html.match(/<select[^>]*(?:id|name)="edizione"[^>]*>([\s\S]*?)<\/select>/i);
+  console.log('[AC] selMatch found:', Boolean(selMatch));
   if (selMatch) {
     const optRe = /<option[^>]+value="(\d+)"[^>]*>([^<]+)<\/option>/gi;
     let om;
@@ -151,6 +152,10 @@ function parseAcHtml(html) {
       editionMap[om[1]] = om[2].trim();
     }
   }
+  console.log('[AC] editionMap:', JSON.stringify(editionMap));
+  // Log snippet dell'HTML per debug struttura
+  const snippet = html.slice(html.indexOf('<table'), html.indexOf('<table') + 800);
+  console.log('[AC] table snippet:', snippet.replace(/\s+/g, ' ').slice(0, 600));
 
   // 2) Righe tabella — struttura AnimeClick:
   //    <tr data-edizione="1"> <td>Titolo Vol.1</td> <td>Tipo ristampa</td> <td>7,00 €</td> <td>26/09/2002</td> <td>Panini Comics</td> </tr>
@@ -206,8 +211,10 @@ function parseAcHtml(html) {
 
 async function fetchAnimeClick(title, mangaTitle) {
   const mangaPath = await animeClickSearch(title);
+  console.log('[AC] mangaPath:', mangaPath);
   if (!mangaPath) return {};
   const raw = await animeClickVolumes(mangaPath);
+  console.log('[AC] raw editions:', JSON.stringify(Object.keys(raw)));
 
   // Normalizza i nomi edizione rimuovendo il prefisso del titolo manga
   const cleaned = {};
