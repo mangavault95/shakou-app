@@ -9,43 +9,65 @@ import { admin, getUserFromRequest, parseBody, attachAuthors } from './_auth.js'
 
 const MANGADEX_BASE = process.env.MANGADEX_BASE_URL || 'https://api.mangadex.org';
 
-// Trova la controparte MangaDex di un manga AniList e ne ricava la lista capitoli.
-// Match affidabile: tra i risultati di ricerca per titolo, sceglie quello il cui
-// link AniList (attributes.links.al) combacia con il nostro external_id.
-async function fetchMangaDexChapters(anilistId, title) {
-  const headers = { 'User-Agent': 'Shakou/1.0 (manga social app)' };
-  const sRes = await fetch(`${MANGADEX_BASE}/manga?title=${encodeURIComponent(title)}&limit=10`, { headers });
-  const sJson = await sRes.json();
-  const candidates = sJson?.data || [];
-  if (!candidates.length) return { mangadex_id: null, chapters: [] };
+const MD_HEADERS = { 'User-Agent': 'Shakou/1.0 (manga social app)' };
+const MD_RATINGS = 'contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica';
 
-  const matched = candidates.find(c => String(c?.attributes?.links?.al || '') === String(anilistId));
-  const chosen = matched || candidates[0];
-  const mdId = chosen.id;
+// Trova l'id MangaDex SOLO con match affidabile: tra i risultati di ricerca per
+// titolo, l'entry il cui link AniList (attributes.links.al) == external_id.
+// Se nessun titolo da' un match certo ritorna null (niente fallback a caso).
+async function findMangaDexId(anilistId, titles) {
+  for (const t of titles) {
+    const title = (t || '').toString().trim();
+    if (!title) continue;
+    try {
+      const res = await fetch(`${MANGADEX_BASE}/manga?title=${encodeURIComponent(title)}&limit=25&${MD_RATINGS}`, { headers: MD_HEADERS });
+      const json = await res.json();
+      const candidates = json?.data || [];
+      const match = candidates.find(c => String(c?.attributes?.links?.al || '') === String(anilistId));
+      if (match) return match.id;
+    } catch (e) {
+      // prova il titolo successivo
+    }
+  }
+  return null;
+}
 
-  const aRes = await fetch(`${MANGADEX_BASE}/manga/${mdId}/aggregate?translatedLanguage[]=en`, { headers });
+// Ricava la lista capitoli (interi) dal MangaDex aggregate. Per ogni capitolo
+// usa il volume MINIMO in cui appare (gli upload duplicati possono assegnare
+// lo stesso capitolo a volumi diversi).
+async function fetchMangaDexChapters(anilistId, titles) {
+  const mdId = await findMangaDexId(anilistId, titles);
+  if (!mdId) return { mangadex_id: null, chapters: [], matched: false };
+
+  const aRes = await fetch(`${MANGADEX_BASE}/manga/${mdId}/aggregate?translatedLanguage[]=en`, { headers: MD_HEADERS });
   const aJson = await aRes.json();
   const volumes = aJson?.volumes;
   const volEntries = volumes && !Array.isArray(volumes) ? Object.values(volumes) : [];
 
-  const list = [];
-  const seen = new Set();
+  const minVolByChapter = new Map(); // numero capitolo -> volume minimo (o null)
   for (const vol of volEntries) {
+    const volNum = vol?.volume && vol.volume !== 'none' ? Number(vol.volume) : null;
     const chapters = vol?.chapters;
     const chEntries = chapters && !Array.isArray(chapters) ? Object.values(chapters) : [];
     for (const ch of chEntries) {
       const raw = ch?.chapter;
       if (raw == null || raw === 'none') continue;
       const n = Number(raw);
-      // scope_number e' integer: per ora elenchiamo solo i capitoli interi
-      if (!Number.isInteger(n)) continue;
-      if (seen.has(n)) continue;
-      seen.add(n);
-      list.push({ number: n, volume: vol?.volume && vol.volume !== 'none' ? vol.volume : null });
+      if (!Number.isInteger(n)) continue; // scope_number e' integer: solo capitoli interi
+      const cur = minVolByChapter.get(n);
+      if (cur === undefined) {
+        minVolByChapter.set(n, volNum);
+      } else if (volNum != null && (cur == null || volNum < cur)) {
+        minVolByChapter.set(n, volNum);
+      }
     }
   }
-  list.sort((a, b) => a.number - b.number);
-  return { mangadex_id: mdId, chapters: list, matched: Boolean(matched) };
+
+  const list = [...minVolByChapter.entries()]
+    .map(([number, volume]) => ({ number, volume }))
+    .sort((a, b) => a.number - b.number);
+
+  return { mangadex_id: mdId, chapters: list, matched: true };
 }
 
 function readScope(q) {
@@ -70,9 +92,10 @@ export default async function handler(req, res) {
       if ((req.query.kind || '').toString() === 'chapters') {
         const external_id = (req.query.external_id || '').toString();
         const title = (req.query.title || '').toString().trim();
-        if (!title) return res.status(400).json({ error: 'missing title' });
+        const titleEn = (req.query.title_en || '').toString().trim();
+        if (!title && !titleEn) return res.status(400).json({ error: 'missing title' });
         try {
-          const result = await fetchMangaDexChapters(external_id, title);
+          const result = await fetchMangaDexChapters(external_id, [title, titleEn]);
           return res.status(200).json({ ok: true, ...result });
         } catch (e) {
           console.error('mangadex chapters error', e);

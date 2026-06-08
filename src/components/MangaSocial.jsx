@@ -12,7 +12,7 @@ const tabStyle = (active) => ({
   cursor: 'pointer'
 });
 
-export default function MangaSocial({ source = 'anilist', externalId, user, title }) {
+export default function MangaSocial({ source = 'anilist', externalId, user, title, titleEn }) {
   const [scope, setScope] = React.useState('manga'); // 'manga' | 'chapter'
   const [chapterInput, setChapterInput] = React.useState('');
   const [activeChapter, setActiveChapter] = React.useState(null);
@@ -59,10 +59,12 @@ export default function MangaSocial({ source = 'anilist', externalId, user, titl
 
   // Carica la lista capitoli reale da MangaDex la prima volta che si apre la tab Capitolo
   React.useEffect(() => {
-    if (scope !== 'chapter' || chaptersLoaded || !title) return;
+    if (scope !== 'chapter' || chaptersLoaded || (!title && !titleEn)) return;
     let active = true;
     setChaptersLoading(true);
-    const params = new URLSearchParams({ kind: 'chapters', external_id: String(externalId || ''), title });
+    const params = new URLSearchParams({ kind: 'chapters', external_id: String(externalId || '') });
+    if (title) params.set('title', title);
+    if (titleEn) params.set('title_en', titleEn);
     fetch(`/api/manga-social?${params.toString()}`)
       .then(r => r.json())
       .then(j => { if (active) { setChapterList(j.chapters || []); setChaptersLoaded(true); } })
@@ -70,7 +72,7 @@ export default function MangaSocial({ source = 'anilist', externalId, user, titl
       .finally(() => { if (active) setChaptersLoading(false); });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope, chaptersLoaded, title, externalId]);
+  }, [scope, chaptersLoaded, title, titleEn, externalId]);
 
   async function postAction(payload) {
     const token = await getAccessToken();

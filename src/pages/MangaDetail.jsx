@@ -214,7 +214,8 @@ export default function MangaDetail({ selectedManga, setView, user }) {
           source={selectedManga.source || 'anilist'}
           externalId={externalId}
           user={user}
-          title={m.title?.romaji || m.title?.english || title}
+          title={m.title?.romaji || title}
+          titleEn={m.title?.english || ''}
         />
       )}
     </div>
