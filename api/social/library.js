@@ -91,6 +91,22 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, deleted: true });
       }
 
+      if (body.action === 'update') {
+        const manga_id = body.manga_id || null;
+        const external_id = body.external_id || null;
+        if (!manga_id && !external_id) return res.status(400).json({ error: 'missing manga_id/external_id' });
+        const updates = {};
+        if (body.status) updates.status = body.status;
+        if (body.volumes_owned !== undefined) updates.volumes_owned = Math.max(0, Number(body.volumes_owned) || 0);
+        if (body.volumes_read !== undefined) updates.volumes_read = Math.max(0, Number(body.volumes_read) || 0);
+        updates.updated_at = new Date().toISOString();
+        let q = admin.from('user_manga').update(updates).eq('user_id', user.id);
+        q = manga_id ? q.eq('manga_id', manga_id) : q.eq('external_id', external_id);
+        const { data, error } = await q.select().single();
+        if (error) throw error;
+        return res.status(200).json({ ok: true, user_manga: data });
+      }
+
       return res.status(400).json({ error: 'invalid_action' });
     }
 
