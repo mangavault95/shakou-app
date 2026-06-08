@@ -90,7 +90,9 @@ export default function MangaLibrary({ user, setView, setSelectedManga }) {
       id: m.id || m.external_id,
       external_id: m.external_id || m.id,
       source: m.source || 'anilist',
-      title: normalizeTitle(m.title || m)
+      origin: 'profile',
+      title: normalizeTitle(m.title || m),
+      cover_url: m.cover_url || m.coverImage?.large
     };
     if (typeof setSelectedManga === 'function') {
       setSelectedManga(normalized);

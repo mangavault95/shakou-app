@@ -58,7 +58,15 @@ export default function MangaSearch({ user, setView, setSelectedManga }) {
 
   function openDetail(manga) {
     if (!setSelectedManga || !setView) return;
-    setSelectedManga({ externalId: manga.id, source: 'anilist' });
+    setSelectedManga({
+      externalId: manga.id,
+      source: 'anilist',
+      origin: 'explore',
+      // preview per il paint immediato mentre MangaDetail carica i dettagli completi
+      title: manga.title,
+      cover_url: manga.coverImage?.large || manga.coverImage?.medium,
+      synopsis: manga.description
+    });
     setView('manga');
   }
 
