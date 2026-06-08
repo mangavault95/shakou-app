@@ -58,7 +58,8 @@ function normEditionName(raw) {
 function stripMangaTitle(edName, mangaTitle) {
   if (!edName || !mangaTitle) return edName;
   const esc = mangaTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return edName.replace(new RegExp(`^${esc}\\s*`, 'i'), '').trim() || edName;
+  // Returns '' when edName is exactly the manga title (base edition → 'Standard')
+  return edName.replace(new RegExp(`^${esc}\\s*`, 'i'), '').trim();
 }
 
 // ─── Google Books ──────────────────────────────────────────────────
@@ -229,7 +230,7 @@ async function fetchAnimeClick(title, mangaTitle) {
   // Normalizza i nomi edizione rimuovendo il prefisso del titolo manga
   const cleaned = {};
   for (const [edName, vols] of Object.entries(raw)) {
-    const cleanName = stripMangaTitle(edName, mangaTitle || title);
+    const cleanName = stripMangaTitle(edName, mangaTitle || title) || 'Standard';
     cleaned[cleanName] = vols;
   }
   return cleaned;
