@@ -12,10 +12,21 @@ const MANGADEX_BASE = process.env.MANGADEX_BASE_URL || 'https://api.mangadex.org
 const MD_HEADERS = { 'User-Agent': 'Shakou/1.0 (manga social app)' };
 const MD_RATINGS = 'contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica';
 
-// Trova l'id MangaDex SOLO con match affidabile: tra i risultati di ricerca per
-// titolo, l'entry il cui link AniList (attributes.links.al) == external_id.
-// Se nessun titolo da' un match certo ritorna null (niente fallback a caso).
+function normTitle(s) {
+  return (s || '')
+    .toString()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+// Trova l'id MangaDex con match affidabile (niente fallback a caso):
+//  1) entry il cui link AniList (attributes.links.al) == external_id
+//  2) altrimenti entry il cui titolo (o alt-title) coincide ESATTAMENTE col
+//     titolo cercato (normalizzato) — sicuro, evita match casuali.
 async function findMangaDexId(anilistId, titles) {
+  const wanted = titles.map(normTitle).filter(Boolean);
   for (const t of titles) {
     const title = (t || '').toString().trim();
     if (!title) continue;
@@ -23,8 +34,18 @@ async function findMangaDexId(anilistId, titles) {
       const res = await fetch(`${MANGADEX_BASE}/manga?title=${encodeURIComponent(title)}&limit=25&${MD_RATINGS}`, { headers: MD_HEADERS });
       const json = await res.json();
       const candidates = json?.data || [];
-      const match = candidates.find(c => String(c?.attributes?.links?.al || '') === String(anilistId));
-      if (match) return match.id;
+
+      const alMatch = candidates.find(c => String(c?.attributes?.links?.al || '') === String(anilistId));
+      if (alMatch) return alMatch.id;
+
+      const titleMatch = candidates.find(c => {
+        const attr = c?.attributes || {};
+        const names = [];
+        if (attr.title) names.push(...Object.values(attr.title));
+        (attr.altTitles || []).forEach(o => names.push(...Object.values(o || {})));
+        return names.some(nm => wanted.includes(normTitle(nm)));
+      });
+      if (titleMatch) return titleMatch.id;
     } catch (e) {
       // prova il titolo successivo
     }
@@ -39,7 +60,10 @@ async function fetchMangaDexChapters(anilistId, titles) {
   const mdId = await findMangaDexId(anilistId, titles);
   if (!mdId) return { mangadex_id: null, chapters: [], matched: false };
 
-  const aRes = await fetch(`${MANGADEX_BASE}/manga/${mdId}/aggregate?translatedLanguage[]=en`, { headers: MD_HEADERS });
+  // Niente filtro lingua: per i manga licenziati i capitoli EN su MangaDex sono
+  // rimossi (buchi). Aggregando tutte le lingue otteniamo l'elenco completo dei
+  // NUMERI di capitolo (a noi serve il numero, non la traduzione).
+  const aRes = await fetch(`${MANGADEX_BASE}/manga/${mdId}/aggregate`, { headers: MD_HEADERS });
   const aJson = await aRes.json();
   const volumes = aJson?.volumes;
   const volEntries = volumes && !Array.isArray(volumes) ? Object.values(volumes) : [];
