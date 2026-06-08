@@ -108,19 +108,19 @@ function parseGbooksItems(items, normTitle) {
 //     - tabella con righe: titolo | edizione | prezzo | data | editore
 
 async function animeClickSearch(title) {
-  // Prova prima con il titolo completo, poi con le prime parole
+  // URL formato AnimeClick: /manga/ID/SLUG/  (es. /manga/9544/20th-century-boys)
   for (const q of [title, title.split(' ').slice(0, 3).join(' ')]) {
     try {
       const url = `${AC_BASE}/ricerca/?q=${encodeURIComponent(q)}&mezzi[]=7`;
       const res = await fetch(url, { headers: FETCH_HEADERS });
       if (!res.ok) continue;
       const html = await res.text();
-      // Cerca link /manga/SLUG/ nei risultati
-      const m = html.match(/href="(https?:\/\/www\.animeclick\.it\/manga\/[a-z0-9\-]+\/?)"/i)
-        || html.match(/href="(\/manga\/[a-z0-9\-]+\/?)"/i);
+      // Cerca link /manga/ID/SLUG/ — ID numerico
+      const m = html.match(/href="(https?:\/\/www\.animeclick\.it\/manga\/\d+\/[^"\/]+\/?)"/i)
+        || html.match(/href="(\/manga\/\d+\/[^"\/]+\/?)"/i);
       if (m) {
         const path = m[1].startsWith('http') ? new URL(m[1]).pathname : m[1];
-        return path.replace(/\/$/, ''); // es. "/manga/20th-century-boys"
+        return path.replace(/\/$/, ''); // es. "/manga/9544/20th-century-boys"
       }
     } catch { /* prova il prossimo */ }
   }
@@ -128,22 +128,21 @@ async function animeClickSearch(title) {
 }
 
 async function animeClickVolumes(mangaPath) {
-  // Fetch pagina volumi — chiediamo tutti i risultati in una volta
-  const url = `${AC_BASE}${mangaPath}/volumi/?per_page=1000`;
+  // Pagina volumi: /manga/ID/SLUG/volumi/?per_page=500
+  const url = `${AC_BASE}${mangaPath}/volumi/?per_page=500`;
   try {
     const res = await fetch(url, { headers: FETCH_HEADERS });
     if (!res.ok) return {};
     const html = await res.text();
-    return parseAcHtml(html, null);
+    return parseAcHtml(html);
   } catch { return {}; }
 }
 
-function parseAcHtml(html, filterEditionId) {
+function parseAcHtml(html) {
   const byEdition = {};
 
-  // 1) Estrai le opzioni dal select edizione
-  //    <select ... id="edizione"...> <option value="">Tutte</option> <option value="1">Nome</option>
-  const editionMap = {}; // id -> nome
+  // 1) Mappa id -> nome edizione dal <select>
+  const editionMap = {}; // "1" -> "20th Century Boys", "2" -> "Ultimate Deluxe Edition" ...
   const selMatch = html.match(/<select[^>]*(?:id|name)="edizione"[^>]*>([\s\S]*?)<\/select>/i);
   if (selMatch) {
     const optRe = /<option[^>]+value="(\d+)"[^>]*>([^<]+)<\/option>/gi;
@@ -153,50 +152,52 @@ function parseAcHtml(html, filterEditionId) {
     }
   }
 
-  // 2) Parsing delle righe della tabella volumi
-  //    Struttura tipica: <tr> <td>TITOLO</td> <td>EDIZIONE</td> <td>PREZZO</td> <td>DATA</td> <td>EDITORE</td> </tr>
-  //    Oppure con data-edizione="ID" sull'elemento <tr>
-  const rows = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
+  // 2) Righe tabella — struttura AnimeClick:
+  //    <tr data-edizione="1"> <td>Titolo Vol.1</td> <td>Tipo ristampa</td> <td>7,00 €</td> <td>26/09/2002</td> <td>Panini Comics</td> </tr>
+  const rows = [...html.matchAll(/<tr([^>]*)>([\s\S]*?)<\/tr>/gi)];
 
   for (const rowMatch of rows) {
-    const row = rowMatch[1];
-    const cells = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m =>
-      m[1].replace(/<[^>]+>/g, '').trim()
+    const attrs = rowMatch[1];
+    const inner = rowMatch[2];
+    const cells = [...inner.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m =>
+      m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
     );
     if (cells.length < 3) continue;
 
-    // Cerca il numero di volume nel titolo (prima cella)
-    const titleCell = cells[0] || '';
-    const volNum = extractVolNum(titleCell);
-    if (!volNum) continue;
+    // Numero volume dal titolo (prima cella)
+    const volNum = extractVolNum(cells[0]);
+    if (!volNum || volNum > 300) continue;
 
-    // Edizione: seconda cella o attributo data-edizione sul <tr>
-    let edCellText = cells[1] || '';
-    const dataEdM = rowMatch[0].match(/data-edizione="([^"]+)"/i);
-    if (dataEdM && editionMap[dataEdM[1]]) edCellText = editionMap[dataEdM[1]];
+    // Nome edizione: da data-edizione="ID" oppure seconda cella
+    let edName = 'Standard';
+    const dataEdM = attrs.match(/data-edizione="(\d+)"/i);
+    if (dataEdM && editionMap[dataEdM[1]]) {
+      edName = normEditionName(editionMap[dataEdM[1]]);
+    } else if (cells[1]) {
+      edName = normEditionName(cells[1]);
+    }
 
-    const edName = normEditionName(edCellText);
-
-    // Prezzo: cerca il pattern €/EUR nelle celle
+    // Prezzo (terza cella tipicamente, ma scansiona tutte)
     let price = null;
-    for (const cell of cells) {
-      const pm = cell.match(/([\d]+[,.][\d]{2})\s*[€E]|[€E]\s*([\d]+[,.][\d]{2})/);
+    for (const cell of cells.slice(1)) {
+      const pm = cell.match(/([\d]+[,.][\d]{2})\s*€|€\s*([\d]+[,.][\d]{2})/);
       if (pm) {
         const n = parseFloat((pm[1] || pm[2]).replace(',', '.'));
         if (n >= 1 && n <= 50) { price = n; break; }
       }
     }
 
-    // Editore: ultima cella significativa
+    // Editore: ultima cella non-data non-prezzo
     let publisher = null;
     for (let i = cells.length - 1; i >= 2; i--) {
-      const c = cells[i].trim();
-      if (c && !c.match(/^\d/) && !c.match(/[€]/)) { publisher = c; break; }
+      const c = cells[i];
+      if (c && !/^\d{2}\/\d{2}\/\d{4}$/.test(c) && !/[€\d,.]/.test(c)) {
+        publisher = c; break;
+      }
     }
 
     if (!byEdition[edName]) byEdition[edName] = {};
-    // Per ogni volume tieni solo la riga più recente (ultima ristampa = prezzo aggiornato)
-    // Sostituiamo sempre (le righe sono ordinate per data asc, l'ultima sovrascrive)
+    // Sovrascriviamo: le righe sono ordinate data asc, l'ultima ristampa ha il prezzo aggiornato
     byEdition[edName][volNum] = { volume_number: volNum, publisher, price };
   }
 
