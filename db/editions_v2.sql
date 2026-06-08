@@ -19,7 +19,8 @@ alter table public.user_manga
   add column if not exists edition_name text default 'Standard';
 
 -- 4) Aggiorna la vista per includere edition_name e calcolare owned_value sull'edizione corretta
-create or replace view public.user_library_stats_view as
+drop view if exists public.user_library_stats_view;
+create view public.user_library_stats_view as
 select
   um.user_id,
   um.source,
