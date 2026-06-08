@@ -222,18 +222,15 @@ function parseAcHtml(html) {
 
 async function fetchAnimeClick(title, mangaTitle) {
   const mangaPath = await animeClickSearch(title);
-  console.log('[AC] mangaPath:', mangaPath);
-  if (!mangaPath) return {};
+  if (!mangaPath) return { path: null, byEd: {} };
   const raw = await animeClickVolumes(mangaPath);
-  console.log('[AC] raw editions:', JSON.stringify(Object.keys(raw)));
 
-  // Normalizza i nomi edizione rimuovendo il prefisso del titolo manga
-  const cleaned = {};
+  const byEd = {};
   for (const [edName, vols] of Object.entries(raw)) {
     const cleanName = stripMangaTitle(edName, mangaTitle || title) || 'Standard';
-    cleaned[cleanName] = vols;
+    byEd[cleanName] = vols;
   }
-  return cleaned;
+  return { path: mangaPath, byEd };
 }
 
 // ─── Merge ────────────────────────────────────────────────────────
@@ -307,24 +304,31 @@ export default async function handler(req, res) {
         const title = (req.query.title || '').toString().trim();
         const titleEn = (req.query.title_en || '').toString().trim();
         const volCount = req.query.volumes_count;
+        const force = (req.query.force || '').toString() === '1';
         if (!source || !external_id || (!title && !titleEn)) return res.status(400).json({ error: 'missing params' });
 
-        // Cache hit
-        const { data: existing } = await admin.from('manga_editions').select('id')
-          .eq('source', source).eq('external_id', external_id).limit(1);
-        if (existing && existing.length) {
-          const { data: all } = await admin.from('manga_editions')
-            .select('edition_name, volume_number, publisher, title, price, release_date, isbn')
-            .eq('source', source).eq('external_id', external_id).order('edition_name').order('volume_number');
-          return res.status(200).json({ ok: true, cached: true, editions_by_name: groupByEdition(all || []) });
+        // Cache hit (bypassato se force=1)
+        if (!force) {
+          const { data: existing } = await admin.from('manga_editions').select('id')
+            .eq('source', source).eq('external_id', external_id).limit(1);
+          if (existing && existing.length) {
+            const { data: all } = await admin.from('manga_editions')
+              .select('edition_name, volume_number, publisher, title, price, release_date, isbn')
+              .eq('source', source).eq('external_id', external_id).order('edition_name').order('volume_number');
+            return res.status(200).json({ ok: true, cached: true, editions_by_name: groupByEdition(all || []) });
+          }
+        } else {
+          await admin.from('manga_editions').delete()
+            .eq('source', source).eq('external_id', external_id);
         }
 
         const searchTitle = title || titleEn;
         const normTitle = searchTitle.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
-        const [gbItems, acByEd] = await Promise.all([
+        const [gbItems, acResult] = await Promise.all([
           fetchGoogleBooks(searchTitle),
           fetchAnimeClick(searchTitle, title)
         ]);
+        const acByEd = acResult.byEd;
         const gbByEd = parseGbooksItems(gbItems, normTitle);
         const editionsByName = mergeEditions(gbByEd, acByEd, volCount);
 
@@ -341,12 +345,19 @@ export default async function handler(req, res) {
           }
         }
 
-        if (!rows.length) return res.status(200).json({ ok: true, editions_by_name: {}, fetched: false });
+        const _debug = {
+          ac_path: acResult.path,
+          ac_editions: Object.fromEntries(Object.entries(acByEd).map(([k, v]) => [k, Object.keys(v).length])),
+          gb_editions: Object.fromEntries(Object.entries(gbByEd).map(([k, v]) => [k, Object.keys(v).length])),
+          merged_editions: Object.fromEntries(Object.entries(editionsByName).map(([k, v]) => [k, v.length])),
+        };
+
+        if (!rows.length) return res.status(200).json({ ok: true, editions_by_name: {}, fetched: false, _debug });
 
         const { error: saveErr } = await admin.from('manga_editions').insert(rows);
-        if (saveErr) console.error('editions insert error', saveErr);
+        if (saveErr) return res.status(200).json({ ok: true, editions_by_name: editionsByName, fetched: true, save_error: saveErr.message, _debug });
 
-        return res.status(200).json({ ok: true, editions_by_name: editionsByName, fetched: true });
+        return res.status(200).json({ ok: true, editions_by_name: editionsByName, fetched: true, _debug });
       }
 
       // GET edizioni salvate
