@@ -122,30 +122,37 @@ async function animeClickSearch(title, dbg) {
   // URL formato AnimeClick: /manga/ID/SLUG/  (es. /manga/9544/20th-century-boys)
   // Proviamo diversi formati di ricerca finché uno restituisce link /manga/ID/SLUG
   const q = encodeURIComponent(title);
+  // Form ufficiale: action="/cerca" method=GET, campi tipo + name
   const candidates = [
-    `/cerca?q=${q}`,
-    `/ricerca/manga?nome=${q}`,
-    `/ricerca/manga?titolo=${q}`,
-    `/ricerca/manga?q=${q}`,
-    `/ricerca/manga?ricerca%5Btesto%5D=${q}`,
-    `/ricerca/manga/${q}`,
-    `/manga/cerca?q=${q}`,
+    `/cerca?tipo=manga&name=${q}`,
+    `/cerca?name=${q}`,
   ];
+  // Parole del titolo per scegliere lo slug migliore
+  const titleWords = title.toLowerCase().normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(w => w.length > 1);
+
   dbg.search_attempts = [];
   for (const cand of candidates) {
     try {
       const url = `${AC_BASE}${cand}`;
       const res = await fetch(url, { headers: FETCH_HEADERS });
       const html = await res.text();
-      const links = [...html.matchAll(/\/manga\/\d+\/[a-z0-9-]+/gi)].map(x => x[0]);
+      const links = [...new Set([...html.matchAll(/\/manga\/\d+\/[a-z0-9-]+/gi)].map(x => x[0]))];
       const pageTitle = (html.match(/<title>([^<]*)<\/title>/i) || [])[1] || '';
       dbg.search_attempts.push({
         cand, status: res.status, len: html.length,
         title: pageTitle.trim().slice(0, 60),
-        manga_links: [...new Set(links)].slice(0, 3),
+        manga_links: links.slice(0, 3),
       });
       if (res.ok && links.length) {
-        return links[0].replace(/\/$/, '');
+        // Scegli il link col maggior numero di parole del titolo nello slug
+        const scored = links.map(href => {
+          const slug = href.split('/')[3] || '';
+          const score = titleWords.filter(w => slug.includes(w)).length;
+          return { href, score };
+        }).sort((a, b) => b.score - a.score);
+        dbg.best_match = scored[0];
+        if (scored[0].score > 0) return scored[0].href.replace(/\/$/, '');
       }
     } catch (e) {
       dbg.search_attempts.push({ cand, error: String(e.message || e) });
@@ -183,6 +190,7 @@ function parseAcHtml(html, dbg = {}) {
   dbg.select_found = Boolean(selMatch);
   dbg.edition_map = editionMap;
   let rowsTotal = 0, rowsMatched = 0;
+  const sampleRows = [];
 
   // 2) Righe tabella #table-edizioni
   // Struttura colonne: [hidden edition_id] [img] [title+link] [ristampa] [price] [date] [publisher] [ratings]
@@ -193,6 +201,17 @@ function parseAcHtml(html, dbg = {}) {
     const inner = rowMatch[2];
     const rawCells = [...inner.matchAll(/<td([^>]*)>([\s\S]*?)<\/td>/gi)];
     if (rawCells.length < 5) continue;
+
+    // Campione per debug: prime righe con >=5 celle
+    if (sampleRows.length < 2) {
+      sampleRows.push({
+        cell_count: rawCells.length,
+        cells: rawCells.slice(0, 8).map(c => ({
+          attrs: c[1].trim().slice(0, 40),
+          text: c[2].replace(/&nbsp;/g, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 50),
+        })),
+      });
+    }
 
     // Prima cella hidden: edition_id
     const firstAttrs = rawCells[0][1];
@@ -243,6 +262,7 @@ function parseAcHtml(html, dbg = {}) {
 
   dbg.rows_total = rowsTotal;
   dbg.rows_matched = rowsMatched;
+  if (rowsMatched === 0) dbg.sample_rows = sampleRows;
   return byEdition;
 }
 
