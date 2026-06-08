@@ -314,6 +314,38 @@ function mergeEditions(gbByEd, acByEd, volCount) {
 export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
+      // Rotta di ispezione/debug: esamina una pagina AnimeClick tramite Vercel
+      // ?inspect=/path[&find=keyword]
+      if (req.query.inspect) {
+        const path = req.query.inspect.toString();
+        if (!path.startsWith('/')) return res.status(400).json({ error: 'path deve iniziare con /' });
+        const url = `${AC_BASE}${path}`;
+        const r = await fetch(url, { headers: FETCH_HEADERS });
+        const html = await r.text();
+        // Estrai i form: action + nomi input/select
+        const forms = [...html.matchAll(/<form([^>]*)>([\s\S]*?)<\/form>/gi)].slice(0, 6).map(fm => {
+          const action = (fm[1].match(/action="([^"]*)"/i) || [])[1] || '';
+          const method = (fm[1].match(/method="([^"]*)"/i) || [])[1] || 'GET';
+          const inputs = [...fm[2].matchAll(/<(?:input|select|textarea)[^>]*\bname="([^"]+)"[^>]*>/gi)].map(x => x[1]);
+          return { action, method, inputs: [...new Set(inputs)] };
+        });
+        const out = { url, status: r.status, len: html.length, forms };
+        if (req.query.find) {
+          const kw = req.query.find.toString();
+          const snippets = [];
+          let idx = 0;
+          while (snippets.length < 4) {
+            idx = html.indexOf(kw, idx);
+            if (idx === -1) break;
+            snippets.push(html.slice(Math.max(0, idx - 200), idx + 400));
+            idx += kw.length;
+          }
+          out.find = kw;
+          out.snippets = snippets;
+        }
+        return res.status(200).json(out);
+      }
+
       if ((req.query.user_stats || '').toString() === '1') {
         const user = await getUserFromRequest(req);
         if (!user) return res.status(401).json({ error: 'unauthorized' });
