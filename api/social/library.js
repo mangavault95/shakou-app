@@ -25,40 +25,58 @@ export default async function handler(req, res) {
       if (body.action === 'follow') {
         const manga = body.manga || {};
         if (!manga.external_id) return res.status(400).json({ error: 'missing manga.external_id' });
+        const source = manga.source || 'anilist';
+        const external_id = String(manga.external_id);
 
-        const mangaRow = {
-          external_id: String(manga.external_id),
-          source: manga.source || 'anilist',
-          title: manga.title || null,
-          cover_url: manga.cover_url || null,
-          last_synced: new Date().toISOString()
-        };
-        const { data: upserted, error: mErr } = await admin
+        // trova o crea il manga (senza ON CONFLICT, robusto rispetto ai vincoli DB)
+        let mangaRecord;
+        const { data: foundManga } = await admin
           .from('manga')
-          .upsert([mangaRow], { onConflict: 'external_id,source' })
-          .select()
-          .single();
-        if (mErr) throw mErr;
+          .select('*')
+          .eq('external_id', external_id)
+          .eq('source', source)
+          .limit(1);
+        if (foundManga && foundManga.length) {
+          mangaRecord = foundManga[0];
+        } else {
+          const { data: inserted, error: insErr } = await admin
+            .from('manga')
+            .insert([{ external_id, source, title: manga.title || null, cover_url: manga.cover_url || null, last_synced: new Date().toISOString() }])
+            .select()
+            .single();
+          if (insErr) throw insErr;
+          mangaRecord = inserted;
+        }
 
-        const userMangaRow = {
-          user_id: user.id,
-          manga_id: upserted.id,
-          external_id: manga.external_id,
-          source: manga.source || 'anilist',
-          status: 'plan',
-          volumes_owned: 0,
-          volumes_read: 0,
-          bookmark: null,
-          updated_at: new Date().toISOString()
-        };
+        // se gia' in libreria, non duplicare
+        const { data: foundUM } = await admin
+          .from('user_manga')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('manga_id', mangaRecord.id)
+          .limit(1);
+        if (foundUM && foundUM.length) {
+          return res.status(200).json({ ok: true, manga: mangaRecord, user_manga: foundUM[0], already: true });
+        }
+
         const { data: um, error: umErr } = await admin
           .from('user_manga')
-          .upsert([userMangaRow], { onConflict: 'user_id,manga_id' })
+          .insert([{
+            user_id: user.id,
+            manga_id: mangaRecord.id,
+            external_id,
+            source,
+            status: 'plan',
+            volumes_owned: 0,
+            volumes_read: 0,
+            bookmark: null,
+            updated_at: new Date().toISOString()
+          }])
           .select()
           .single();
         if (umErr) throw umErr;
 
-        return res.status(200).json({ ok: true, manga: upserted, user_manga: um });
+        return res.status(200).json({ ok: true, manga: mangaRecord, user_manga: um });
       }
 
       if (body.action === 'unfollow') {
