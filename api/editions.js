@@ -274,15 +274,21 @@ function parseAcHtml(html, dbg = {}) {
   return byEdition;
 }
 
-async function fetchAnimeClick(title, mangaTitle) {
-  const dbg = {};
-  const mangaPath = await animeClickSearch(title, dbg);
+async function fetchAnimeClick(titles, mangaTitle) {
+  const dbg = { tried_titles: [] };
+  let mangaPath = null;
+  for (const t of titles) {
+    if (!t) continue;
+    dbg.tried_titles.push(t);
+    mangaPath = await animeClickSearch(t, dbg);
+    if (mangaPath) break;
+  }
   if (!mangaPath) return { path: null, byEd: {}, dbg };
   const raw = await animeClickVolumes(mangaPath, dbg);
 
   const byEd = {};
   for (const [edName, vols] of Object.entries(raw)) {
-    const cleanName = stripMangaTitle(edName, mangaTitle || title) || 'Standard';
+    const cleanName = stripMangaTitle(edName, mangaTitle) || 'Standard';
     byEd[cleanName] = vols;
   }
   return { path: mangaPath, byEd, dbg };
@@ -412,11 +418,14 @@ export default async function handler(req, res) {
         // Cache mancante (o forzato): per lo scraping serve almeno un titolo.
         if (!title && !titleEn) return res.status(200).json({ ok: true, editions_by_name: {}, fetched: false });
 
-        const searchTitle = title || titleEn;
+        // In Italia i manga sono titolati in inglese/localizzato (es. "20th Century
+        // Boys"), non in romaji ("20 Seiki Shounen"): cerchiamo prima con title_en.
+        const searchTitle = titleEn || title;
         const normTitle = searchTitle.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
+        const acTitles = [...new Set([titleEn, title].filter(Boolean))];
         const [gbItems, acResult] = await Promise.all([
           fetchGoogleBooks(searchTitle),
-          fetchAnimeClick(searchTitle, title)
+          fetchAnimeClick(acTitles, searchTitle)
         ]);
         const acByEd = acResult.byEd;
         const gbByEd = parseGbooksItems(gbItems, normTitle);
