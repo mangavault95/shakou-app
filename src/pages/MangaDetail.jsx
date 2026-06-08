@@ -13,35 +13,77 @@ const DETAIL_QUERY = `
       description(asHtml: false)
       genres
       status
-      popularity
       averageScore
       chapters
       volumes
       startDate { year }
-      staff(perPage: 6) { edges { node { name { full } } } }
+      staff(perPage: 12) { edges { role node { name { full } } } }
       siteUrl
     }
   }
 `;
 
-// AniList description usa HTML leggero (<br>, <i>, ...). Lo ripuliamo per il testo.
-function stripHtml(s) {
+// Stato AniList -> italiano
+const STATUS_IT = {
+  FINISHED: 'Concluso',
+  RELEASING: 'In corso',
+  NOT_YET_RELEASED: 'Non ancora uscito',
+  CANCELLED: 'Cancellato',
+  HIATUS: 'In pausa'
+};
+
+// Generi AniList -> italiano (fallback all'originale se non mappato)
+const GENRE_IT = {
+  Action: 'Azione',
+  Adventure: 'Avventura',
+  Comedy: 'Commedia',
+  Drama: 'Dramma',
+  Ecchi: 'Ecchi',
+  Fantasy: 'Fantasy',
+  Horror: 'Horror',
+  'Mahou Shoujo': 'Mahou Shoujo',
+  Mecha: 'Mecha',
+  Music: 'Musica',
+  Mystery: 'Mistero',
+  Psychological: 'Psicologico',
+  Romance: 'Sentimentale',
+  'Sci-Fi': 'Fantascienza',
+  'Slice of Life': 'Spaccato di vita',
+  Sports: 'Sport',
+  Supernatural: 'Soprannaturale',
+  Thriller: 'Thriller'
+};
+
+// AniList description usa HTML leggero (<br>, <i>, ...). Lo ripuliamo e togliamo
+// la riga "(Source: ...)" e l'eventuale sezione "Notes:".
+function cleanDescription(s) {
   if (!s) return '';
-  return s
+  let t = s
     .replace(/<br\s*\/?>(\n)?/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .trim();
+    .replace(/<[^>]+>/g, '');
+  t = t.replace(/\(Source:[^)]*\)/gi, '');           // rimuovi "(Source: ...)"
+  t = t.replace(/\n\s*Notes?\s*:[\s\S]*$/i, '');      // taglia da "Notes:" in poi
+  return t.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// Solo l'autore principale: ruolo Story/Art/Creator, non traduttori/editori.
+function pickMainAuthor(staff) {
+  const edges = staff?.edges || [];
+  const main = edges.find(e => /story|art|creator/i.test(e.role || ''));
+  return (main || edges[0])?.node?.name?.full || null;
 }
 
 export default function MangaDetail({ selectedManga, setView }) {
   const [data, setData] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
+  const [synopsisIt, setSynopsisIt] = React.useState('');
 
   // La ricerca usa `externalId`, la libreria usa `external_id`: supportiamo entrambi.
   const externalId = selectedManga?.externalId ?? selectedManga?.external_id ?? null;
   const backView = selectedManga?.origin || 'explore';
 
+  // 1) Carica i dettagli da AniList
   React.useEffect(() => {
     if (!externalId) return;
     let active = true;
@@ -65,6 +107,23 @@ export default function MangaDetail({ selectedManga, setView }) {
     return () => { active = false; };
   }, [externalId]);
 
+  // 2) Traduci la trama in italiano (fallback: testo originale ripulito)
+  const rawSynopsis = cleanDescription(data?.description || selectedManga?.synopsis);
+  React.useEffect(() => {
+    if (!rawSynopsis) { setSynopsisIt(''); return; }
+    let active = true;
+    setSynopsisIt(''); // azzera mentre traduce
+    fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: rawSynopsis, target: 'it' })
+    })
+      .then(r => r.json())
+      .then(j => { if (active) setSynopsisIt(j.translated || rawSynopsis); })
+      .catch(() => { if (active) setSynopsisIt(rawSynopsis); });
+    return () => { active = false; };
+  }, [rawSynopsis]);
+
   if (!selectedManga) {
     return (
       <div style={{ padding: 20 }}>
@@ -73,14 +132,15 @@ export default function MangaDetail({ selectedManga, setView }) {
     );
   }
 
-  // Dati AniList se disponibili, altrimenti la "preview" passata da chi ci ha aperto.
   const m = data || {};
   const title = normalizeTitle(m.title || selectedManga.title || selectedManga);
   const cover = m.coverImage?.extraLarge || m.coverImage?.large || selectedManga.cover_url || '/placeholder-cover.png';
-  const synopsis = stripHtml(m.description) || stripHtml(selectedManga.synopsis) || '';
   const genres = m.genres || [];
-  const authors = (m.staff?.edges || []).map(e => e.node?.name?.full).filter(Boolean);
+  const author = pickMainAuthor(m.staff);
   const year = m.startDate?.year;
+  const statusIt = m.status ? (STATUS_IT[m.status] || m.status) : null;
+  // mostra la traduzione se pronta, altrimenti l'originale ripulito come fallback
+  const synopsis = synopsisIt || rawSynopsis;
 
   return (
     <div style={{ padding: 20, maxWidth: 900, margin: '0 auto' }}>
@@ -103,17 +163,19 @@ export default function MangaDetail({ selectedManga, setView }) {
         <div style={{ flex: 1, minWidth: 280 }}>
           <h1 style={{ marginTop: 0, marginBottom: 4 }}>{title}</h1>
           <div style={{ color: '#666', fontSize: 13 }}>
-            {[m.status, year].filter(Boolean).join(' · ') || '—'}
+            {[statusIt, year].filter(Boolean).join(' · ') || '—'}
           </div>
 
-          {authors.length > 0 && (
-            <div style={{ marginTop: 6, fontSize: 14 }}>di <strong>{authors.join(', ')}</strong></div>
+          {author && (
+            <div style={{ marginTop: 6, fontSize: 14 }}>di <strong>{author}</strong></div>
           )}
 
           {genres.length > 0 && (
             <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {genres.map(g => (
-                <span key={g} style={{ fontSize: 12, padding: '3px 8px', background: '#f1f1f1', borderRadius: 999 }}>{g}</span>
+                <span key={g} style={{ fontSize: 12, padding: '3px 8px', background: '#f1f1f1', borderRadius: 999 }}>
+                  {GENRE_IT[g] || g}
+                </span>
               ))}
             </div>
           )}
