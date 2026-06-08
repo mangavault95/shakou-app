@@ -1,6 +1,7 @@
 // src/pages/MangaDetail.jsx
 import React from 'react';
 import { normalizeTitle } from '../utils/normalizeTitle';
+import MangaSocial from '../components/MangaSocial';
 
 const ANILIST_URL = 'https://graphql.anilist.co';
 
@@ -73,7 +74,7 @@ function pickMainAuthor(staff) {
   return (main || edges[0])?.node?.name?.full || null;
 }
 
-export default function MangaDetail({ selectedManga, setView }) {
+export default function MangaDetail({ selectedManga, setView, user }) {
   const [data, setData] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
@@ -207,6 +208,10 @@ export default function MangaDetail({ selectedManga, setView }) {
           )}
         </div>
       </div>
+
+      {externalId && (
+        <MangaSocial source={selectedManga.source || 'anilist'} externalId={externalId} user={user} />
+      )}
     </div>
   );
 }

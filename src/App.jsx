@@ -78,6 +78,7 @@ export default function App() {
           <MangaDetail
             selectedManga={selectedManga}
             setView={setView}
+            user={user}
           />
         )}
         {view === 'login' && <Login setView={setView} setUser={setUser} supabase={supabase} />}
