@@ -138,23 +138,21 @@ async function animeClickSearch(title) {
 }
 
 async function animeClickVolumes(mangaPath) {
-  const url = `${AC_BASE}${mangaPath}/volumi/?per_page=500`;
+  const url = `${AC_BASE}${mangaPath}/edizioni`;
   try {
     const res = await fetch(url, { headers: { ...FETCH_HEADERS, Referer: `${AC_BASE}${mangaPath}/` } });
-    console.log('[AC] volumes status:', res.status, url);
     if (!res.ok) return {};
     const html = await res.text();
     return parseAcHtml(html);
-  } catch (e) { console.log('[AC] volumes error:', e.message); return {}; }
+  } catch { return {}; }
 }
 
 function parseAcHtml(html) {
   const byEdition = {};
 
-  // 1) Mappa id -> nome edizione dal <select>
-  const editionMap = {}; // "1" -> "20th Century Boys", "2" -> "Ultimate Deluxe Edition" ...
-  const selMatch = html.match(/<select[^>]*(?:id|name)="edizione"[^>]*>([\s\S]*?)<\/select>/i);
-  console.log('[AC] selMatch found:', Boolean(selMatch));
+  // 1) Mappa id -> nome edizione dal <select id="select_collana_edizione">
+  const editionMap = {};
+  const selMatch = html.match(/<select[^>]*id="select_collana_edizione"[^>]*>([\s\S]*?)<\/select>/i);
   if (selMatch) {
     const optRe = /<option[^>]+value="(\d+)"[^>]*>([^<]+)<\/option>/gi;
     let om;
@@ -162,58 +160,60 @@ function parseAcHtml(html) {
       editionMap[om[1]] = om[2].trim();
     }
   }
-  console.log('[AC] editionMap:', JSON.stringify(editionMap));
-  // Log snippet dell'HTML per debug struttura
-  const snippet = html.slice(html.indexOf('<table'), html.indexOf('<table') + 800);
-  console.log('[AC] table snippet:', snippet.replace(/\s+/g, ' ').slice(0, 600));
 
-  // 2) Righe tabella — struttura AnimeClick:
-  //    <tr data-edizione="1"> <td>Titolo Vol.1</td> <td>Tipo ristampa</td> <td>7,00 €</td> <td>26/09/2002</td> <td>Panini Comics</td> </tr>
+  // 2) Righe tabella #table-edizioni
+  // Struttura colonne: [hidden edition_id] [img] [title+link] [ristampa] [price] [date] [publisher] [ratings]
   const rows = [...html.matchAll(/<tr([^>]*)>([\s\S]*?)<\/tr>/gi)];
 
   for (const rowMatch of rows) {
-    const attrs = rowMatch[1];
     const inner = rowMatch[2];
-    const cells = [...inner.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m =>
-      m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
-    );
-    if (cells.length < 3) continue;
+    const rawCells = [...inner.matchAll(/<td([^>]*)>([\s\S]*?)<\/td>/gi)];
+    if (rawCells.length < 5) continue;
 
-    // Numero volume dal titolo (prima cella)
-    const volNum = extractVolNum(cells[0]);
+    // Prima cella hidden: edition_id
+    const firstAttrs = rawCells[0][1];
+    const firstContent = rawCells[0][2].replace(/<[^>]+>/g, '').trim();
+    const isHidden = /display\s*:\s*none/i.test(firstAttrs);
+    if (!isHidden || !/^\d+$/.test(firstContent)) continue;
+    const editionId = firstContent;
+
+    // Nome edizione dalla mappa
+    const rawEdName = editionMap[editionId] || '';
+    const edName = normEditionName(rawEdName) || 'Standard';
+
+    // Terza cella: titolo con link — estrarre il numero di volume dal testo
+    const titleCell = rawCells[2][2];
+    const titleText = titleCell.replace(/&nbsp;/g, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    // Numero volume: ultimo numero nella stringa del titolo
+    const volM = titleText.match(/(\d+)\s*$/);
+    if (!volM) continue;
+    const volNum = parseInt(volM[1], 10);
     if (!volNum || volNum > 300) continue;
 
-    // Nome edizione: da data-edizione="ID" oppure seconda cella
-    let edName = 'Standard';
-    const dataEdM = attrs.match(/data-edizione="(\d+)"/i);
-    if (dataEdM && editionMap[dataEdM[1]]) {
-      edName = normEditionName(editionMap[dataEdM[1]]);
-    } else if (cells[1]) {
-      edName = normEditionName(cells[1]);
-    }
-
-    // Prezzo (terza cella tipicamente, ma scansiona tutte)
+    // Quinta cella (index 4): prezzo "14,90 €"
     let price = null;
-    for (const cell of cells.slice(1)) {
-      const pm = cell.match(/([\d]+[,.][\d]{2})\s*€|€\s*([\d]+[,.][\d]{2})/);
-      if (pm) {
-        const n = parseFloat((pm[1] || pm[2]).replace(',', '.'));
-        if (n >= 1 && n <= 50) { price = n; break; }
-      }
+    const priceCell = rawCells[4][2].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').trim();
+    const pm = priceCell.match(/([\d]+[,.][\d]{2})\s*€|€\s*([\d]+[,.][\d]{2})/);
+    if (pm) {
+      const n = parseFloat((pm[1] || pm[2]).replace(',', '.'));
+      if (n >= 1 && n <= 100) price = n;
     }
 
-    // Editore: ultima cella non-data non-prezzo
+    // Settima cella (index 6): editore (contiene img bandiera + testo)
     let publisher = null;
-    for (let i = cells.length - 1; i >= 2; i--) {
-      const c = cells[i];
-      if (c && !/^\d{2}\/\d{2}\/\d{4}$/.test(c) && !/[€\d,.]/.test(c)) {
-        publisher = c; break;
+    if (rawCells[6]) {
+      const pubCell = rawCells[6][2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      if (pubCell && !/^\d{2}\/\d{2}\/\d{4}$/.test(pubCell)) {
+        publisher = pubCell || null;
       }
     }
 
     if (!byEdition[edName]) byEdition[edName] = {};
-    // Sovrascriviamo: le righe sono ordinate data asc, l'ultima ristampa ha il prezzo aggiornato
-    byEdition[edName][volNum] = { volume_number: volNum, publisher, price };
+    // Le righe "Primo"/"1° Ristampa"/ecc. appartengono alla stessa edizione e volume.
+    // Teniamo solo la prima occorrenza (Primo = edizione originale con prezzo originale).
+    if (!byEdition[edName][volNum]) {
+      byEdition[edName][volNum] = { volume_number: volNum, publisher, price };
+    }
   }
 
   return byEdition;
