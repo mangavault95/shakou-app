@@ -96,6 +96,7 @@ export default async function handler(req, res) {
         if (!title && !titleEn) return res.status(400).json({ error: 'missing title' });
         try {
           const result = await fetchMangaDexChapters(external_id, [title, titleEn]);
+          res.setHeader('Cache-Control', 'no-store');
           return res.status(200).json({ ok: true, ...result });
         } catch (e) {
           console.error('mangadex chapters error', e);

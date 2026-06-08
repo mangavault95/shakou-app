@@ -57,6 +57,15 @@ export default function MangaSocial({ source = 'anilist', externalId, user, titl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, externalId, effScope, effNumber]);
 
+  // Reset quando si cambia manga (evita di mostrare i capitoli del manga precedente)
+  React.useEffect(() => {
+    setScope('manga');
+    setActiveChapter(null);
+    setChapterInput('');
+    setChapterList([]);
+    setChaptersLoaded(false);
+  }, [externalId]);
+
   // Carica la lista capitoli reale da MangaDex la prima volta che si apre la tab Capitolo
   React.useEffect(() => {
     if (scope !== 'chapter' || chaptersLoaded || (!title && !titleEn)) return;
