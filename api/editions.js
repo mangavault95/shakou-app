@@ -118,14 +118,17 @@ function parseGbooksItems(items, normTitle) {
 //     - select#edizione con le opzioni edizione (value=id, testo=nome)
 //     - tabella con righe: titolo | edizione | prezzo | data | editore
 
-async function animeClickSearch(title) {
+async function animeClickSearch(title, dbg) {
   // URL formato AnimeClick: /manga/ID/SLUG/  (es. /manga/9544/20th-century-boys)
   for (const q of [title, title.split(' ').slice(0, 3).join(' ')]) {
     try {
       const url = `${AC_BASE}/ricerca/?q=${encodeURIComponent(q)}&mezzi[]=7`;
       const res = await fetch(url, { headers: FETCH_HEADERS });
-      if (!res.ok) continue;
       const html = await res.text();
+      dbg.search_status = res.status;
+      dbg.search_len = html.length;
+      if (!dbg.search_snippet) dbg.search_snippet = html.slice(0, 300);
+      if (!res.ok) continue;
       // Cerca link /manga/ID/SLUG/ — ID numerico
       const m = html.match(/href="(https?:\/\/www\.animeclick\.it\/manga\/\d+\/[^"\/]+\/?)"/i)
         || html.match(/href="(\/manga\/\d+\/[^"\/]+\/?)"/i);
@@ -133,22 +136,25 @@ async function animeClickSearch(title) {
         const path = m[1].startsWith('http') ? new URL(m[1]).pathname : m[1];
         return path.replace(/\/$/, ''); // es. "/manga/9544/20th-century-boys"
       }
-    } catch { /* prova il prossimo */ }
+    } catch (e) { dbg.search_error = String(e.message || e); }
   }
   return null;
 }
 
-async function animeClickVolumes(mangaPath) {
+async function animeClickVolumes(mangaPath, dbg) {
   const url = `${AC_BASE}${mangaPath}/edizioni`;
   try {
     const res = await fetch(url, { headers: { ...FETCH_HEADERS, Referer: `${AC_BASE}${mangaPath}/` } });
-    if (!res.ok) return {};
     const html = await res.text();
-    return parseAcHtml(html);
-  } catch { return {}; }
+    dbg.vol_status = res.status;
+    dbg.vol_len = html.length;
+    dbg.vol_snippet = html.slice(0, 300);
+    if (!res.ok) return {};
+    return parseAcHtml(html, dbg);
+  } catch (e) { dbg.vol_error = String(e.message || e); return {}; }
 }
 
-function parseAcHtml(html) {
+function parseAcHtml(html, dbg = {}) {
   const byEdition = {};
 
   // 1) Mappa id -> nome edizione dal <select id="select_collana_edizione">
@@ -161,12 +167,16 @@ function parseAcHtml(html) {
       editionMap[om[1]] = om[2].trim();
     }
   }
+  dbg.select_found = Boolean(selMatch);
+  dbg.edition_map = editionMap;
+  let rowsTotal = 0, rowsMatched = 0;
 
   // 2) Righe tabella #table-edizioni
   // Struttura colonne: [hidden edition_id] [img] [title+link] [ristampa] [price] [date] [publisher] [ratings]
   const rows = [...html.matchAll(/<tr([^>]*)>([\s\S]*?)<\/tr>/gi)];
 
   for (const rowMatch of rows) {
+    rowsTotal++;
     const inner = rowMatch[2];
     const rawCells = [...inner.matchAll(/<td([^>]*)>([\s\S]*?)<\/td>/gi)];
     if (rawCells.length < 5) continue;
@@ -177,6 +187,7 @@ function parseAcHtml(html) {
     const isHidden = /display\s*:\s*none/i.test(firstAttrs);
     if (!isHidden || !/^\d+$/.test(firstContent)) continue;
     const editionId = firstContent;
+    rowsMatched++;
 
     // Nome edizione dalla mappa
     const rawEdName = editionMap[editionId] || '';
@@ -217,20 +228,23 @@ function parseAcHtml(html) {
     }
   }
 
+  dbg.rows_total = rowsTotal;
+  dbg.rows_matched = rowsMatched;
   return byEdition;
 }
 
 async function fetchAnimeClick(title, mangaTitle) {
-  const mangaPath = await animeClickSearch(title);
-  if (!mangaPath) return { path: null, byEd: {} };
-  const raw = await animeClickVolumes(mangaPath);
+  const dbg = {};
+  const mangaPath = await animeClickSearch(title, dbg);
+  if (!mangaPath) return { path: null, byEd: {}, dbg };
+  const raw = await animeClickVolumes(mangaPath, dbg);
 
   const byEd = {};
   for (const [edName, vols] of Object.entries(raw)) {
     const cleanName = stripMangaTitle(edName, mangaTitle || title) || 'Standard';
     byEd[cleanName] = vols;
   }
-  return { path: mangaPath, byEd };
+  return { path: mangaPath, byEd, dbg };
 }
 
 // ─── Merge ────────────────────────────────────────────────────────
@@ -347,6 +361,7 @@ export default async function handler(req, res) {
 
         const _debug = {
           ac_path: acResult.path,
+          ac_diag: acResult.dbg,
           ac_editions: Object.fromEntries(Object.entries(acByEd).map(([k, v]) => [k, Object.keys(v).length])),
           gb_editions: Object.fromEntries(Object.entries(gbByEd).map(([k, v]) => [k, Object.keys(v).length])),
           merged_editions: Object.fromEntries(Object.entries(editionsByName).map(([k, v]) => [k, v.length])),
