@@ -1,6 +1,7 @@
 // src/components/MangaLibrary.jsx
 import React from 'react';
 import { normalizeTitle } from '../utils/normalizeTitle';
+import { getAccessToken } from '../utils/auth';
 
 export default function MangaLibrary({ user, setView, setSelectedManga }) {
   const [library, setLibrary] = React.useState([]);
@@ -16,8 +17,9 @@ export default function MangaLibrary({ user, setView, setSelectedManga }) {
   async function fetchLibrary() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/social/getUserLibrary?user_id=${encodeURIComponent(user.id)}`, {
-        headers: { 'Content-Type': 'application/json', 'x-sync-token': import.meta.env.VITE_SYNC_SECRET || '' }
+      const token = await getAccessToken();
+      const res = await fetch('/api/social/library', {
+        headers: { Authorization: `Bearer ${token}` }
       });
       const text = await res.text();
       let json;
@@ -57,10 +59,11 @@ export default function MangaLibrary({ user, setView, setSelectedManga }) {
     setRemoving(r => ({ ...r, [id]: true }));
 
     try {
-      const res = await fetch('/api/social/unfollowManga', {
+      const token = await getAccessToken();
+      const res = await fetch('/api/social/library', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-sync-token': import.meta.env.VITE_SYNC_SECRET || '' },
-        body: JSON.stringify({ user_id: user.id, manga_id: item.manga_id || item.manga?.id || null, external_id: item.external_id || item.manga?.external_id || null })
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'unfollow', manga_id: item.manga_id || item.manga?.id || null, external_id: item.external_id || item.manga?.external_id || null })
       });
       const text = await res.text();
       if (!res.ok) {

@@ -1,6 +1,7 @@
 // src/components/MangaCard.jsx
 import React from 'react';
 import { normalizeTitle } from '../utils/normalizeTitle';
+import { getAccessToken } from '../utils/auth';
 
 export default function MangaCard({ manga, user, onOpen, setView }) {
   const title = normalizeTitle(manga.title || manga.title_raw || manga);
@@ -13,7 +14,7 @@ export default function MangaCard({ manga, user, onOpen, setView }) {
     setLoading(true);
     try {
       const body = {
-        user_id: user.id,
+        action: 'follow',
         manga: {
           external_id: manga.id || manga.external_id,
           source: manga.source || 'anilist',
@@ -22,11 +23,12 @@ export default function MangaCard({ manga, user, onOpen, setView }) {
         }
       };
 
-      const res = await fetch('/api/social/followManga', {
+      const token = await getAccessToken();
+      const res = await fetch('/api/social/library', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-sync-token': import.meta.env.VITE_SYNC_SECRET || ''
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify(body)
       });
