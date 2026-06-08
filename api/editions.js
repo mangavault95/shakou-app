@@ -46,6 +46,20 @@ async function isAdmin(user) {
   return data?.role === 'admin';
 }
 
+// Decodifica le entità HTML più comuni nei testi AnimeClick
+function decodeEntities(s) {
+  if (!s) return '';
+  return s
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&euro;/gi, '€')
+    .replace(/&#8364;/g, '€')
+    .replace(/&amp;/g, '&')
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&agrave;/g, 'à').replace(/&egrave;/g, 'è').replace(/&igrave;/g, 'ì')
+    .replace(/&ograve;/g, 'ò').replace(/&ugrave;/g, 'ù').replace(/&eacute;/g, 'é');
+}
+
 function normEditionName(raw) {
   if (!raw) return 'Standard';
   const s = raw.trim();
@@ -202,17 +216,6 @@ function parseAcHtml(html, dbg = {}) {
     const rawCells = [...inner.matchAll(/<td([^>]*)>([\s\S]*?)<\/td>/gi)];
     if (rawCells.length < 5) continue;
 
-    // Campione per debug: prime righe con >=5 celle
-    if (sampleRows.length < 2) {
-      sampleRows.push({
-        cell_count: rawCells.length,
-        cells: rawCells.slice(0, 8).map(c => ({
-          attrs: c[1].trim().slice(0, 40),
-          text: c[2].replace(/&nbsp;/g, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 50),
-        })),
-      });
-    }
-
     // Prima cella hidden: edition_id
     const firstAttrs = rawCells[0][1];
     const firstContent = rawCells[0][2].replace(/<[^>]+>/g, '').trim();
@@ -225,31 +228,36 @@ function parseAcHtml(html, dbg = {}) {
     const rawEdName = editionMap[editionId] || '';
     const edName = normEditionName(rawEdName) || 'Standard';
 
-    // Terza cella: titolo con link — estrarre il numero di volume dal testo
-    const titleCell = rawCells[2][2];
-    const titleText = titleCell.replace(/&nbsp;/g, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    // Numero volume: ultimo numero nella stringa del titolo
-    const volM = titleText.match(/(\d+)\s*$/);
+    // Testo pulito di ogni cella (tag rimossi, entità decodificate)
+    const cellText = rawCells.map(c => decodeEntities(c[2].replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim());
+
+    // Titolo con link (cella 2) — numero volume = ultimo numero del testo
+    const volM = (cellText[2] || '').match(/(\d+)\s*$/);
     if (!volM) continue;
     const volNum = parseInt(volM[1], 10);
     if (!volNum || volNum > 300) continue;
 
-    // Quinta cella (index 4): prezzo "14,90 €"
+    // Prezzo: scansiona le celle dopo il titolo cercando un importo con €
     let price = null;
-    const priceCell = rawCells[4][2].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').trim();
-    const pm = priceCell.match(/([\d]+[,.][\d]{2})\s*€|€\s*([\d]+[,.][\d]{2})/);
-    if (pm) {
-      const n = parseFloat((pm[1] || pm[2]).replace(',', '.'));
-      if (n >= 1 && n <= 100) price = n;
+    for (let i = 3; i < cellText.length; i++) {
+      const pm = cellText[i].match(/(\d{1,3}[,.]\d{2})\s*€/) || cellText[i].match(/€\s*(\d{1,3}[,.]\d{2})/);
+      if (pm) {
+        const n = parseFloat(pm[1].replace(',', '.'));
+        if (n >= 0.5 && n <= 200) { price = n; break; }
+      }
     }
 
-    // Settima cella (index 6): editore (contiene img bandiera + testo)
+    // Editore: ultima cella con testo alfabetico che non sia data né prezzo
     let publisher = null;
-    if (rawCells[6]) {
-      const pubCell = rawCells[6][2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      if (pubCell && !/^\d{2}\/\d{2}\/\d{4}$/.test(pubCell)) {
-        publisher = pubCell || null;
+    for (let i = cellText.length - 1; i >= 3; i--) {
+      const c = cellText[i];
+      if (c && /[a-zà-ù]{3,}/i.test(c) && !/\d{2}\/\d{2}\/\d{4}/.test(c) && !/€/.test(c)) {
+        publisher = c; break;
       }
+    }
+
+    if (sampleRows.length < 2) {
+      sampleRows.push({ editionId, edName, volNum, price, publisher, cellText: cellText.slice(0, 8) });
     }
 
     if (!byEdition[edName]) byEdition[edName] = {};
@@ -262,7 +270,7 @@ function parseAcHtml(html, dbg = {}) {
 
   dbg.rows_total = rowsTotal;
   dbg.rows_matched = rowsMatched;
-  if (rowsMatched === 0) dbg.sample_rows = sampleRows;
+  dbg.sample_rows = sampleRows;
   return byEdition;
 }
 
