@@ -99,6 +99,7 @@ export default async function handler(req, res) {
         if (body.status) updates.status = body.status;
         if (body.volumes_owned !== undefined) updates.volumes_owned = Math.max(0, Number(body.volumes_owned) || 0);
         if (body.volumes_read !== undefined) updates.volumes_read = Math.max(0, Number(body.volumes_read) || 0);
+        if (body.edition_name !== undefined) updates.edition_name = body.edition_name || 'Standard';
         updates.updated_at = new Date().toISOString();
         let q = admin.from('user_manga').update(updates).eq('user_id', user.id);
         q = manga_id ? q.eq('manga_id', manga_id) : q.eq('external_id', external_id);
