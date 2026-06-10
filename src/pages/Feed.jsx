@@ -4,10 +4,12 @@ import PostComposer from '../components/PostComposer';
 import PostCard from '../components/PostCard';
 import UserSearch from '../components/UserSearch';
 import { getAccessToken } from '../utils/auth';
+import useIsMobile from '../hooks/useIsMobile';
 
 export default function Feed({ user }) {
   const [posts, setPosts] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const isMobile = useIsMobile();
 
   async function fetchFeed() {
     setLoading(true);
@@ -36,7 +38,14 @@ export default function Feed({ user }) {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 300px', gap: 20, maxWidth: 1000, margin: '0 auto', alignItems: 'start' }}>
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: isMobile ? '1fr' : 'minmax(0,1fr) 300px',
+      gap: 20,
+      maxWidth: 1000,
+      margin: '0 auto',
+      alignItems: 'start'
+    }}>
       <div style={{ minWidth: 0 }}>
         <h2 style={{ marginTop: 0 }}>Home</h2>
         <PostComposer user={user} onPosted={handlePosted} />
@@ -48,9 +57,11 @@ export default function Feed({ user }) {
           posts.map(p => <PostCard key={p.id} post={p} user={user} />)
         )}
       </div>
-      <aside style={{ position: 'sticky', top: 80 }}>
-        <UserSearch user={user} onChanged={fetchFeed} />
-      </aside>
+      {!isMobile && (
+        <aside style={{ position: 'sticky', top: 80 }}>
+          <UserSearch user={user} onChanged={fetchFeed} />
+        </aside>
+      )}
     </div>
   );
 }

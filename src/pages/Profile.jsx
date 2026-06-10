@@ -1,6 +1,7 @@
 // src/pages/Profile.jsx
 import React from 'react';
 import MangaLibrary from '../components/MangaLibrary';
+import LibraryStats from '../components/LibraryStats';
 import Header from '../components/Header';
 
 function formatDisplayName(user) {
@@ -13,6 +14,8 @@ function formatDisplayName(user) {
 }
 
 export default function Profile({ user, setView, setSelectedManga }) {
+  const [statsKey, setStatsKey] = React.useState(0);
+
   if (!user) {
     return (
       <div style={{ padding: 20 }}>
@@ -37,8 +40,12 @@ export default function Profile({ user, setView, setSelectedManga }) {
       </div>
 
       <section style={{ marginBottom: 28 }}>
+        <LibraryStats key={statsKey} userId={user.id} />
+      </section>
+
+      <section style={{ marginBottom: 28 }}>
         <h3 style={{ marginTop: 0 }}>La tua Libreria</h3>
-        <MangaLibrary user={user} setView={setView} setSelectedManga={setSelectedManga} />
+        <MangaLibrary user={user} setView={setView} setSelectedManga={setSelectedManga} onLibraryChange={() => setStatsKey(k => k + 1)} />
       </section>
 
       <section style={{ marginTop: 28 }}>

@@ -2,6 +2,7 @@
 import React from 'react';
 import { normalizeTitle } from '../utils/normalizeTitle';
 import MangaSocial from '../components/MangaSocial';
+import MangaEditions from '../components/MangaEditions';
 
 const ANILIST_URL = 'https://graphql.anilist.co';
 
@@ -79,6 +80,7 @@ export default function MangaDetail({ selectedManga, setView, user }) {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
   const [synopsisIt, setSynopsisIt] = React.useState('');
+  const [selectedEdition, setSelectedEdition] = React.useState(null);
 
   // La ricerca usa `externalId`, la libreria usa `external_id`: supportiamo entrambi.
   const externalId = selectedManga?.externalId ?? selectedManga?.external_id ?? null;
@@ -208,6 +210,19 @@ export default function MangaDetail({ selectedManga, setView, user }) {
           )}
         </div>
       </div>
+
+      {externalId && (
+        <MangaEditions
+          source={selectedManga?.source || 'anilist'}
+          externalId={externalId}
+          user={user}
+          title={m.title?.romaji || ''}
+          titleEn={m.title?.english || ''}
+          volumesCount={m.volumes || ''}
+          selectedEdition={selectedEdition}
+          onEditionSelect={(name) => setSelectedEdition(name)}
+        />
+      )}
 
       {externalId && (
         <MangaSocial
