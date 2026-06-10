@@ -3,100 +3,114 @@ import React from 'react';
 import { normalizeTitle } from '../utils/normalizeTitle';
 import { getAccessToken } from '../utils/auth';
 
-export default function MangaCard({ manga, user, onOpen, setView }) {
+export default function MangaCard({ manga, user, onOpen }) {
   const title = normalizeTitle(manga.title || manga.title_raw || manga);
   const cover = manga.coverImage?.large || manga.coverImage?.medium || manga.cover_url || '/placeholder-cover.png';
-  const [loading, setLoading] = React.useState(false);
+  const [adding, setAdding] = React.useState(false);
+  const [added, setAdded] = React.useState(false);
 
   async function follow(e) {
     e.stopPropagation();
     if (!user) return alert('Devi essere loggato.');
-    setLoading(true);
+    setAdding(true);
     try {
-      const body = {
-        action: 'follow',
-        manga: {
-          external_id: manga.id || manga.external_id,
-          source: manga.source || 'anilist',
-          title,
-          cover_url: cover
-        }
-      };
-
       const token = await getAccessToken();
       const res = await fetch('/api/social/library', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(body)
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          action: 'follow',
+          manga: { external_id: manga.id || manga.external_id, source: manga.source || 'anilist', title, cover_url: cover }
+        })
       });
-
-      const text = await res.text();
-      if (!res.ok) {
-        console.error('followManga error response:', text);
-        alert('Errore server: ' + (text || res.status));
-        return;
-      }
-
-      let json;
-      try { json = JSON.parse(text); } catch (e) { json = null; }
-
-      if (!json) {
-        alert('Risposta non valida dal server.');
-        return;
-      }
-
-      if (json?.ok) {
-        alert('Aggiunto ai tuoi manga.');
-        if (typeof setView === 'function') {
-          setView('profile');
-        }
-      } else {
-        alert('Errore: ' + (json?.error || 'unknown'));
-      }
-    } catch (err) {
-      console.error('follow request failed', err);
+      const json = await res.json().catch(() => null);
+      if (json?.ok) setAdded(true);
+      else alert('Errore: ' + (json?.error || res.status));
+    } catch {
       alert('Errore di rete');
     } finally {
-      setLoading(false);
+      setAdding(false);
     }
   }
 
-  function handleOpen(e) {
-    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
-    if (onOpen) onOpen(manga);
-  }
+  const genres = (manga.genres || []).slice(0, 2);
 
   return (
     <article
-      onClick={handleOpen}
+      onClick={() => onOpen?.(manga)}
       style={{
-        border: '1px solid #eee',
-        borderRadius: 10,
+        borderRadius: 12,
         overflow: 'hidden',
-        background: '#fff',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        boxShadow: 'var(--shadow-sm)',
+        cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
-        minHeight: 320,
-        cursor: 'pointer'
+        transition: 'box-shadow .18s, transform .18s',
       }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; e.currentTarget.style.transform = 'none'; }}
     >
-      <div style={{ height: 260, backgroundImage: `url(${cover})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-        <div style={{ fontWeight: 700 }}>{title}</div>
-        <div style={{ color: '#666', fontSize: 13 }}>{(manga.genres || []).slice(0, 3).join(', ')}</div>
-        <p style={{ fontSize: 13, color: '#444', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
-          {manga.description ? (manga.description.length > 220 ? manga.description.slice(0, 220) + '…' : manga.description) : 'Nessuna descrizione.'}
-        </p>
-        <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: 13, color: '#888' }}>Pop: {manga.popularity || '—'}</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={(e) => { e.stopPropagation(); onOpen && onOpen(manga); }} style={{ padding: '6px 10px' }}>Apri</button>
-            <button onClick={follow} disabled={loading} style={{ padding: '6px 10px' }}>{loading ? '...' : 'Segui'}</button>
-          </div>
+      {/* Cover */}
+      <div style={{
+        width: '100%',
+        paddingTop: '145%',
+        position: 'relative',
+        background: 'var(--accent-light)',
+        overflow: 'hidden',
+      }}>
+        <img
+          src={cover}
+          alt={title}
+          loading="lazy"
+          style={{
+            position: 'absolute', inset: 0,
+            width: '100%', height: '100%',
+            objectFit: 'cover',
+          }}
+        />
+        {/* Overlay bottone + su hover */}
+        <button
+          onClick={follow}
+          disabled={adding || added}
+          style={{
+            position: 'absolute', bottom: 8, right: 8,
+            padding: '5px 10px', fontSize: 12, fontWeight: 700,
+            background: added ? 'var(--gold)' : 'var(--accent)',
+            color: '#fff', borderRadius: 8, border: 'none',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+            opacity: adding ? 0.7 : 1,
+          }}
+        >
+          {added ? '✓' : adding ? '…' : '+'}
+        </button>
+      </div>
+
+      {/* Info sotto la cover */}
+      <div style={{ padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{
+          fontWeight: 700, fontSize: 13, lineHeight: 1.3,
+          overflow: 'hidden', display: '-webkit-box',
+          WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+          color: 'var(--text)',
+        }}>
+          {title}
         </div>
+
+        {genres.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
+            {genres.map(g => (
+              <span key={g} style={{
+                fontSize: 10, fontWeight: 600,
+                padding: '2px 7px', borderRadius: 99,
+                background: 'var(--accent-light)', color: 'var(--accent)',
+                border: '1px solid rgba(124,58,237,0.15)',
+                letterSpacing: '.02em',
+              }}>{g}</span>
+            ))}
+          </div>
+        )}
       </div>
     </article>
   );

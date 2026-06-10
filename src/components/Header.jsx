@@ -6,47 +6,42 @@ export default function Header({ user, onLogout, setView, onHamburger }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef(null);
   const isMobile = useIsMobile();
-
   const isAdmin = user?.user_metadata?.role === 'admin';
 
   React.useEffect(() => {
     function handleClickOutside(e) {
-      if (ref.current && !ref.current.contains(e.target)) {
-        setOpen(false);
-      }
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
     }
     document.addEventListener('click', handleClickOutside, true);
     return () => document.removeEventListener('click', handleClickOutside, true);
   }, []);
 
-  function toggleMenu(e) {
-    e.stopPropagation();
-    e.preventDefault();
-    setOpen(o => !o);
-  }
+  function go(view) { setOpen(false); setView(view); }
 
-  function go(view) {
-    setOpen(false);
-    setView(view);
-  }
+  const menuBtnStyle = {
+    display: 'block', width: '100%', padding: '10px 14px',
+    textAlign: 'left', background: 'none', border: 'none',
+    borderRadius: 8, fontSize: 14, color: 'var(--text)',
+    cursor: 'pointer', transition: 'background .12s',
+  };
 
   return (
-    <header
-      style={{
-        height: 64,
-        padding: '12px 20px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        borderBottom: '1px solid #eee',
-        background: '#fff',
-        position: 'fixed',
-        top: 0,
-        left: isMobile ? 0 : 220,
-        right: 0,
-        zIndex: 3000
-      }}
-    >
+    <header style={{
+      height: 60,
+      padding: '0 20px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderBottom: '1px solid var(--border)',
+      background: 'var(--surface)',
+      position: 'fixed',
+      top: 0,
+      left: isMobile ? 0 : 220,
+      right: 0,
+      zIndex: 3000,
+      boxShadow: 'var(--shadow-sm)',
+    }}>
+      {/* Sinistra: hamburger (mobile) oppure logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         {isMobile && (
           <button
@@ -57,76 +52,61 @@ export default function Header({ user, onLogout, setView, onHamburger }) {
               padding: 6, display: 'flex', flexDirection: 'column', gap: 5
             }}
           >
-            <span style={{ display: 'block', width: 22, height: 2, background: '#222', borderRadius: 2 }} />
-            <span style={{ display: 'block', width: 22, height: 2, background: '#222', borderRadius: 2 }} />
-            <span style={{ display: 'block', width: 22, height: 2, background: '#222', borderRadius: 2 }} />
+            {[0,1,2].map(i => (
+              <span key={i} style={{ display: 'block', width: 22, height: 2, background: 'var(--accent)', borderRadius: 2 }} />
+            ))}
           </button>
         )}
-        <div style={{ fontWeight: 700, fontSize: 18 }}>Shakou</div>
+        {isMobile && (
+          <span style={{ fontWeight: 800, fontSize: 18, color: 'var(--accent)', letterSpacing: '-0.5px' }}>Shakou</span>
+        )}
       </div>
 
-      <div ref={ref} style={{ position: 'relative', zIndex: 3100 }}>
+      {/* Destra: avatar + dropdown */}
+      <div ref={ref} style={{ position: 'relative', zIndex: 3100, marginLeft: 'auto' }}>
         <button
-          onClick={toggleMenu}
+          onClick={e => { e.stopPropagation(); e.preventDefault(); setOpen(o => !o); }}
           aria-haspopup="true"
           aria-expanded={open}
           style={{
-            position: 'relative',
-            zIndex: 3200,
-            width: 40,
-            height: 40,
-            borderRadius: '50%',
-            background: '#ddd',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 700,
-            border: 'none',
-            padding: 0,
-            userSelect: 'none',
-            pointerEvents: 'auto'
+            width: 38, height: 38, borderRadius: '50%',
+            background: 'var(--accent-light)',
+            border: '2px solid var(--accent)',
+            cursor: 'pointer', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            fontWeight: 700, color: 'var(--accent)', fontSize: 15,
+            overflow: 'hidden', padding: 0,
           }}
         >
-          {user ? (user.user_metadata?.avatar_url ? (
-            <img
-              src={user.user_metadata.avatar_url}
-              alt="avatar"
-              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
-            />
-          ) : user.email[0].toUpperCase()) : 'G'}
+          {user?.user_metadata?.avatar_url
+            ? <img src={user.user_metadata.avatar_url} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : user ? user.email[0].toUpperCase() : '✦'
+          }
         </button>
 
         {open && (
           <div
             role="menu"
-            style={{
-              position: 'absolute',
-              right: 0,
-              top: 48,
-              background: '#fff',
-              border: '1px solid #eee',
-              borderRadius: 8,
-              boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
-              width: 220,
-              padding: 8,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 6,
-              zIndex: 3300
-            }}
             onClick={e => e.stopPropagation()}
+            style={{
+              position: 'absolute', right: 0, top: 46,
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+              boxShadow: 'var(--shadow)',
+              width: 200, padding: 6,
+              display: 'flex', flexDirection: 'column', gap: 2,
+              zIndex: 3300,
+            }}
           >
-            {!user && <button onClick={() => go('login')} style={{ padding: 8, textAlign: 'left' }}>Login</button>}
-
-            {user && (
-              <>
-                <button onClick={() => go('profile')} style={{ padding: 8, textAlign: 'left' }}>Profilo</button>
-                <button onClick={() => go('settings')} style={{ padding: 8, textAlign: 'left' }}>Impostazioni</button>
-                {isAdmin && <button onClick={() => go('admin')} style={{ padding: 8, textAlign: 'left' }}>Admin Panel</button>}
-                <button onClick={() => { setOpen(false); onLogout?.(); }} style={{ padding: 8, textAlign: 'left', color: 'red' }}>Logout</button>
-              </>
-            )}
+            {!user && <button style={menuBtnStyle} onClick={() => go('login')}>Accedi / Registrati</button>}
+            {user && <>
+              <button style={menuBtnStyle} onClick={() => go('profile')}>Profilo</button>
+              <button style={menuBtnStyle} onClick={() => go('settings')}>Impostazioni</button>
+              {isAdmin && <button style={menuBtnStyle} onClick={() => go('admin')}>Admin Panel</button>}
+              <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+              <button style={{ ...menuBtnStyle, color: '#e11d48' }} onClick={() => { setOpen(false); onLogout?.(); }}>Logout</button>
+            </>}
           </div>
         )}
       </div>
