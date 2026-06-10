@@ -1,9 +1,11 @@
 // src/components/Header.jsx
 import React from 'react';
+import useIsMobile from '../hooks/useIsMobile';
 
-export default function Header({ user, onLogout, setView }) {
+export default function Header({ user, onLogout, setView, onHamburger }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef(null);
+  const isMobile = useIsMobile();
 
   const isAdmin = user?.user_metadata?.role === 'admin';
 
@@ -40,12 +42,28 @@ export default function Header({ user, onLogout, setView }) {
         background: '#fff',
         position: 'fixed',
         top: 0,
-        left: 220,
+        left: isMobile ? 0 : 220,
         right: 0,
         zIndex: 3000
       }}
     >
-      <div style={{ fontWeight: 700, fontSize: 18 }}>Shakou</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {isMobile && (
+          <button
+            onClick={onHamburger}
+            aria-label="Apri menu"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: 6, display: 'flex', flexDirection: 'column', gap: 5
+            }}
+          >
+            <span style={{ display: 'block', width: 22, height: 2, background: '#222', borderRadius: 2 }} />
+            <span style={{ display: 'block', width: 22, height: 2, background: '#222', borderRadius: 2 }} />
+            <span style={{ display: 'block', width: 22, height: 2, background: '#222', borderRadius: 2 }} />
+          </button>
+        )}
+        <div style={{ fontWeight: 700, fontSize: 18 }}>Shakou</div>
+      </div>
 
       <div ref={ref} style={{ position: 'relative', zIndex: 3100 }}>
         <button
@@ -106,7 +124,7 @@ export default function Header({ user, onLogout, setView }) {
                 <button onClick={() => go('profile')} style={{ padding: 8, textAlign: 'left' }}>Profilo</button>
                 <button onClick={() => go('settings')} style={{ padding: 8, textAlign: 'left' }}>Impostazioni</button>
                 {isAdmin && <button onClick={() => go('admin')} style={{ padding: 8, textAlign: 'left' }}>Admin Panel</button>}
-                <button onClick={() => { setOpen(false); onLogout && onLogout(); }} style={{ padding: 8, textAlign: 'left', color: 'red' }}>Logout</button>
+                <button onClick={() => { setOpen(false); onLogout?.(); }} style={{ padding: 8, textAlign: 'left', color: 'red' }}>Logout</button>
               </>
             )}
           </div>
