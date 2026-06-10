@@ -64,22 +64,39 @@ export default function Login({ setUser, setView }) {
     setLoading(true);
     try {
       if (mode === 'register') {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) {
-          setMessage({ type: 'error', text: error.message });
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim(), password }),
+        });
+        const json = await res.json().catch(() => ({}));
+
+        if (res.status === 409 || json.error === 'email_taken') {
+          setMessage({ type: 'error', text: 'Questa email è già registrata. Prova ad accedere.' });
+        } else if (res.status === 400) {
+          const msgs = {
+            missing_fields: 'Compila tutti i campi.',
+            password_too_short: 'Password minimo 8 caratteri.',
+            invalid_email: 'Indirizzo email non valido.',
+          };
+          setMessage({ type: 'error', text: msgs[json.error] || json.error || 'Dati non validi.' });
+        } else if (!res.ok) {
+          setMessage({ type: 'error', text: json.error || 'Errore server. Riprova.' });
         } else {
           setMessage({
             type: 'success',
-            text: 'Registrazione completata! Controlla la tua email e clicca il link di verifica per attivare l\'account.'
+            text: json.email_sent
+              ? 'Account creato! Controlla la tua email (anche spam) e clicca il link di verifica.'
+              : 'Account creato, ma l\'email di verifica non è stata inviata. Contatta il supporto.'
           });
           setPassword('');
           setConfirm('');
         }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
         if (error) {
           if (error.message?.toLowerCase().includes('email not confirmed')) {
-            setMessage({ type: 'error', text: 'Email non ancora verificata. Controlla la tua casella di posta.' });
+            setMessage({ type: 'error', text: 'Email non ancora verificata. Controlla la tua casella (anche spam).' });
           } else if (error.message?.toLowerCase().includes('invalid login credentials')) {
             setMessage({ type: 'error', text: 'Email o password errati.' });
           } else {
