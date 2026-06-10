@@ -89,12 +89,15 @@ export default async function handler(req, res) {
   }
 
   // 4) Manda email via Resend
+  const actionLink = linkData.properties?.action_link;
+  if (!actionLink) {
+    return res.status(200).json({ ok: true, email_sent: false, reason: 'no_action_link', link_keys: Object.keys(linkData.properties || {}) });
+  }
+
   try {
-    await sendVerificationEmail(normalizedEmail, linkData.properties.action_link);
+    await sendVerificationEmail(normalizedEmail, actionLink);
     return res.status(200).json({ ok: true, email_sent: true });
   } catch (mailErr) {
-    console.error('sendVerificationEmail error', mailErr.message);
-    // Utente creato ma email non inviata — restituiamo ok con warning
     return res.status(200).json({ ok: true, email_sent: false, reason: mailErr.message });
   }
 }
